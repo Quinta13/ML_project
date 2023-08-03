@@ -11,7 +11,7 @@ from os import path
 
 from PIL import Image
 
-from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, TEST, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, TRAINING_2D
+from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, TRAINING_2D
 
 """ LOG """
 
@@ -166,7 +166,7 @@ def _read_image(path_: str) -> Image:
     return Image.open(fp=path_)
 
 
-def read_image(idx: int, training: bool = True) -> Image:
+def read_image(idx: int) -> Image:
     """
     Read an image from the directory given its index
     :param idx: image index
@@ -175,8 +175,10 @@ def read_image(idx: int, training: bool = True) -> Image:
     """
 
     file_ = f"{str(idx).zfill(8)}.{IMG_EXT}"
-    dir_ = get_training_dir() if training else get_test_dir()
+    dir_ = get_training_dir()
 
     img_path = path.join(dir_, file_)
 
     return _read_image(path_=img_path)
+
+#%%
