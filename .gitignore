@@ -3,3 +3,6 @@
 
 # Dataset
 /FreiHAND/
+
+# Pycache
+*__pycache__/
