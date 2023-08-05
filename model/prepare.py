@@ -157,7 +157,7 @@ class DataPreprocessing:
         self._train_indexes, self._val_indexes, self._test_indexes = \
             self._create_partitions(data=data, train_prc=train_prc, val_prc=val_prc, test_prc=test_prc)
 
-        # Splits - initialized after split method invocation
+        # Splits - initialized after prepare method invocation
         self._train_image: np.ndarray | None = None
         self._train_heatmaps: np.ndarray | None = None
         self._val_image: np.ndarray | None = None
@@ -165,7 +165,7 @@ class DataPreprocessing:
         self._test_image: np.ndarray | None = None
         self._test_heatmaps: np.ndarray | None = None
 
-        self._split: bool = False
+        self._prepared: bool = False
 
     def __str__(self) -> str:
         """
@@ -189,7 +189,7 @@ class DataPreprocessing:
         """
         :return: training set
         """
-        self._check_split()
+        self._check_prepared()
         return self._train_image, self._train_heatmaps
 
     @property
@@ -197,7 +197,7 @@ class DataPreprocessing:
         """
         :return: training set
         """
-        self._check_split()
+        self._check_prepared()
         return self._val_image, self._val_heatmaps
 
     @property
@@ -205,7 +205,7 @@ class DataPreprocessing:
         """
         :return: training set
         """
-        self._check_split()
+        self._check_prepared()
         return self._test_image, self._test_heatmaps
 
     @property
@@ -249,11 +249,11 @@ class DataPreprocessing:
 
         return train_indexes, val_indexes, test_indexes
 
-    # SPLIT
+    # PREPARATION
 
-    def split(self):
+    def prepare(self):
         """
-        Split data applying min-max scaling and normalization over channels
+        Prepare data applying min-max scaling and normalization over channels
         """
 
         # Getting images and keypoints
@@ -290,8 +290,8 @@ class DataPreprocessing:
         self._test_image = test_img_nrm
         self._test_heatmaps = test_hm
 
-        # Set split flag on
-        self._split = True
+        # Set prepared flag on
+        self._prepared = True
 
     @staticmethod
     def _standard_normalization(images: np.ndarray, means: np.ndarray, stds: np.ndarray) -> np.ndarray:
@@ -336,12 +336,12 @@ class DataPreprocessing:
 
         return images, keypoints
 
-    def _check_split(self):
+    def _check_prepared(self):
         """
-        Check if split was performed
+        Check if prepared was performed
         """
-        if not self._split:
-            raise Exception(f"Dataset was not split yet. Use `split()` method to perform it")
+        if not self._prepared:
+            raise Exception(f"Dataset was not prepared yet. Use `prepare()` method to perform it")
 
     # PLOT
 
@@ -381,10 +381,10 @@ class DataPreprocessing:
 
     def save(self):
         """
-        Save dataset split to disk
+        Save dataset to disk
         """
 
-        self._check_split()
+        self._check_prepared()
 
         # Create directory
         create_directory(path_=get_data_dir())
