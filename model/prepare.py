@@ -136,16 +136,16 @@ class DataPreprocessing:
         self._train_indexes: List[int]
         self._val_indexes: List[int]
         self._test_indexes: List[int]
-        self._train_indexes, self._val_indexes, self._test_indexes =\
+        self._train_indexes, self._val_indexes, self._test_indexes = \
             self._create_partitions(data=data, train_prc=train_prc, val_prc=val_prc, test_prc=test_prc)
 
         # Splits - initialized after split method invocation
         self._train_image: np.ndarray | None = None
-        self._train_keypoints: np.ndarray | None = None
+        self._train_heatmaps: np.ndarray | None = None
         self._val_image: np.ndarray | None = None
-        self._val_keypoints: np.ndarray | None = None
+        self._val_heatmaps: np.ndarray | None = None
         self._test_image: np.ndarray | None = None
-        self._test_keypoints: np.ndarray | None = None
+        self._test_heatmaps: np.ndarray | None = None
 
         self._split: bool = False
 
@@ -169,7 +169,7 @@ class DataPreprocessing:
         :return: training set
         """
         self._check_split()
-        return self._train_image, self._train_keypoints
+        return self._train_image, self._train_heatmaps
 
     @property
     def validation(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -177,7 +177,7 @@ class DataPreprocessing:
         :return: training set
         """
         self._check_split()
-        return self._val_image, self._val_keypoints
+        return self._val_image, self._val_heatmaps
 
     @property
     def test(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -185,7 +185,7 @@ class DataPreprocessing:
         :return: training set
         """
         self._check_split()
-        return self._test_image, self._test_keypoints
+        return self._test_image, self._test_heatmaps
 
     @property
     def lens(self) -> Tuple[int, int, int]:
@@ -219,7 +219,7 @@ class DataPreprocessing:
 
         # Computing slices
         train_indexes = data_indexes[:train_len]
-        val_indexes = data_indexes[train_len:(train_len+val_len)]
+        val_indexes = data_indexes[train_len:(train_len + val_len)]
         test_indexes = data_indexes[-test_len:]
 
         return train_indexes, val_indexes, test_indexes
@@ -231,11 +231,11 @@ class DataPreprocessing:
 
         # Getting images and keypoints
         log(info="Loading Training set")
-        train_img, train_kp = self._load_images_keypoints(idxs=self._train_indexes)
+        train_img, train_hm = self._load_images_heatmaps(idxs=self._train_indexes)
         log(info="Loading Validation set")
-        val_img, val_kp = self._load_images_keypoints(idxs=self._train_indexes)
+        val_img, val_hm = self._load_images_heatmaps(idxs=self._val_indexes)
         log(info="Loading Test set")
-        test_img, test_kp = self._load_images_keypoints(idxs=self._train_indexes)
+        test_img, test_hm = self._load_images_heatmaps(idxs=self._test_indexes)
 
         # Normalization in [0, 1]
         log(info="Applying mix-max scaling")
@@ -253,13 +253,15 @@ class DataPreprocessing:
         val_img_nrm = self._standard_normalization(images=val_img, means=mean_ch, stds=std_ch)
         test_img_nrm = self._standard_normalization(images=test_img, means=mean_ch, stds=std_ch)
 
+        # ------ LABELS ------
+
         # Save results
-        self._train_image: np.ndarray = train_img_nrm
-        self._train_keypoints: np.ndarray = train_kp
-        self._val_image: np.ndarray = val_img_nrm
-        self._val_keypoints: np.ndarray = val_kp
-        self._test_image: np.ndarray = test_img_nrm
-        self._test_keypoints: np.ndarray = test_kp
+        self._train_image = train_img_nrm
+        self._train_heatmaps = train_hm
+        self._val_image = val_img_nrm
+        self._val_heatmaps = val_hm
+        self._test_image = test_img_nrm
+        self._test_heatmaps = test_hm
 
         # Set split flag on
         self._split = True
@@ -277,7 +279,6 @@ class DataPreprocessing:
         normalized = []
 
         for image in images:
-
             # Separate the RGB channels
             r_channel, g_channel, b_channel = image[:, :, 0], image[:, :, 1], image[:, :, 2]
 
@@ -293,18 +294,18 @@ class DataPreprocessing:
 
         return np.array(normalized)
 
-    def _load_images_keypoints(self, idxs: List[int]) -> Tuple[np.ndarray, np.ndarray]:
+    def _load_images_heatmaps(self, idxs: List[int]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Load images as arrays and associated labels
         :param idxs: indexes to load
-        :return: tuple images - keypoints
+        :return: tuple images - heatmaps
         """
 
         hands = [self._hands.get_hand(idx=idx) for idx in idxs]
 
         images = np.array([np.array(hand.image) for hand in hands])
 
-        keypoints = np.array([hand.keypoints for hand in hands])
+        keypoints = np.array([hand.heatmaps for hand in hands])
 
         return images, keypoints
 
@@ -328,7 +329,6 @@ class DataPreprocessing:
         # Save
         log(info="Saving files")
         for data, fp in zip(datas, fps):
-
             data_x, data_y = data
             fp_x, fp_y = fp
 
