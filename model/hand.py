@@ -3,10 +3,11 @@ This file contains some classes to handle Hand and Keypoints
 """
 from typing import List, Tuple
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from io_ import read_json, get_training_2d, read_image, log
-from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, AUGMENTED
+from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, NUM_KEYPOINTS
 
 
 class Hand:
@@ -106,6 +107,71 @@ class Hand:
                 draw.line([self.keypoints[p1], self.keypoints[p2]], fill=color_rgb, width=WIDTH)
 
         return new_img
+
+    def get_heatmap(self, key: int, sigma: float = SIGMA_BLUR) -> np.ndarray:
+        """
+        Returns the heatmap for given keypoint
+        :param key: key index
+        :param sigma: sigma blur
+        :return: keypoint heatmap array in scale [0, 1]
+        """
+
+        heatmap = np.zeros((NEW_SIZE, NEW_SIZE), dtype=np.float32)
+
+        x0, y0 = self.keypoints[key]
+        x = np.arange(0, NEW_SIZE, 1, float)
+        y = np.arange(0, NEW_SIZE, 1, float)[:, np.newaxis]
+
+        heatmap += np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2.0 * sigma ** 2))
+
+        return heatmap
+
+    def get_heatmaps(self, sigma: float = SIGMA_BLUR) -> np.ndarray:
+        """
+        Returns heatmaps of keypoints
+        :param key: key index
+        :param sigma: sigma blur
+        :return: all heatmaps array in scale [0, 1]
+        """
+
+        return np.sum([self.get_heatmap(key=i, sigma=sigma) for i in range(NUM_KEYPOINTS)], axis=0)
+
+    @staticmethod
+    def _draw_keypoint(heatmap: np.ndarray) -> Image:
+        """
+        Draw heatmap given array of pixels in scale [0, 1]
+        :param heatmap: heatmap array
+        :return: heatmap image
+        """
+
+        scaled_image_array = (heatmap * 255).astype(np.uint8)
+
+        # Convert the scaled array to a Pillow image with 'L' mode (grayscale)
+        return Image.fromarray(scaled_image_array, mode='L')
+
+    def draw_heatmap(self, key: int, sigma: float = SIGMA_BLUR) -> Image:
+        """
+        Draws the heatmap for given keypoint
+        :param key: key index
+        :param sigma: sigma blur
+        :return: keypoint heatmap image
+        """
+
+        return self._draw_keypoint(
+            heatmap=self.get_heatmap(key=key, sigma=sigma)
+        )
+
+    def draw_heatmaps(self, sigma: float = SIGMA_BLUR) -> Image:
+        """
+        Draws all the heatmaps
+        :param sigma: sigma blur
+        :return: keypoint heatmaps image
+        """
+
+        return self._draw_keypoint(
+            heatmap=self.get_heatmaps(sigma=sigma)
+        )
+
 
 
 class HandCollection:
