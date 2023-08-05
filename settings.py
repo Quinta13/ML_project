@@ -24,11 +24,21 @@ TRAINING_CAMERA: str = "training_K.json"
 
 
 # Train - Test - Validation
-DATA = 1000
 
-TRAIN_PRC = 0.7
+DATA = 100
+
+TRAIN_PRC = .7
 TEST_PRC = .1
 VAL_PRC = .2
+
+DATA_DIR = "data"
+
+TRAIN_NAME = "training"
+VAL_NAME = "val"
+TEST_NAME = "test"
+
+VECTOR = "images"
+LABELS = "labels"
 
 # Logging
 LOG: bool = True
@@ -53,7 +63,10 @@ COLORS: Dict[str, str] = {
 }
 
 # Finger connections
+NUM_KEYPOINTS = 21
+
 WIDTH = 3
+SIGMA_BLUR = 1.0
 
 LINES: Dict[str, List[Tuple[int, int]]] = {
     THUMB: [(0, 1), (1, 2), (2, 3), (3, 4)],
