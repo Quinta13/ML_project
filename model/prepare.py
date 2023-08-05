@@ -8,7 +8,7 @@ from typing import Tuple, List
 import numpy as np
 
 from io_ import get_dataset_dir, log, download_zip, get_training_2d, read_json, get_training_3d, get_training_camera, \
-    store_json
+    store_json, create_directory, get_data_dir, get_data_files, store_npy
 from model.hand import HandCollection
 from settings import FREIHAND_URL, TOT_IMG, DATA
 
@@ -128,13 +128,18 @@ class DataPreprocessing:
         # Hand collection
         self._hands = HandCollection()
 
+        # Percentage check
+        if abs(train_prc + val_prc + test_prc - 1) > 1e-9:  # floating point precision
+            raise Exception(f"Invalid distribution [{train_prc}; {val_prc}; {test_prc}] ")
+
         # Indexes
         self._train_indexes: List[int]
         self._val_indexes: List[int]
         self._test_indexes: List[int]
-        self._train_indexes, self._val_indexes, self._test_indexes = self._create_partitions(data=data, train_prc=train_prc, val_prc=val_prc, test_prc=test_prc)
+        self._train_indexes, self._val_indexes, self._test_indexes =\
+            self._create_partitions(data=data, train_prc=train_prc, val_prc=val_prc, test_prc=test_prc)
 
-        # Split, which includes [0, 1] scaling
+        # Splits - initialized after split method invocation
         self._train_image: np.ndarray | None = None
         self._train_keypoints: np.ndarray | None = None
         self._val_image: np.ndarray | None = None
@@ -193,6 +198,7 @@ class DataPreprocessing:
     def _create_partitions(data: int, train_prc: float,
                            val_prc: float, test_prc: float) -> Tuple[List[int], List[int], List[int]]:
         """
+        Create random data partitions basing on given data and percentages
         :param data: length of data
         :param train_prc: training set percentage
         :param val_prc: validation set percentage
@@ -220,22 +226,34 @@ class DataPreprocessing:
 
     def split(self):
         """
-        Split data and applies normalization over channels
+        Split data applying min-max scaling and normalization over channels
         """
 
         # Getting images and keypoints
+        log(info="Loading Training set")
         train_img, train_kp = self._load_images_keypoints(idxs=self._train_indexes)
+        log(info="Loading Validation set")
         val_img, val_kp = self._load_images_keypoints(idxs=self._train_indexes)
+        log(info="Loading Test set")
         test_img, test_kp = self._load_images_keypoints(idxs=self._train_indexes)
+
+        # Normalization in [0, 1]
+        log(info="Applying mix-max scaling")
+        train_img = train_img.astype(np.float32) / 255.
+        val_img = val_img.astype(np.float32) / 255.
+        test_img = test_img.astype(np.float32) / 255.
 
         # Computing mean and stds of training set per channel
         mean_ch = np.mean(train_img, axis=(0, 1, 2))
         std_ch = np.std(train_img, axis=(0, 1, 2))
 
+        # Normalize
+        log(info="Applying normalization")
         train_img_nrm = self._standard_normalization(images=train_img, means=mean_ch, stds=std_ch)
         val_img_nrm = self._standard_normalization(images=val_img, means=mean_ch, stds=std_ch)
         test_img_nrm = self._standard_normalization(images=test_img, means=mean_ch, stds=std_ch)
 
+        # Save results
         self._train_image: np.ndarray = train_img_nrm
         self._train_keypoints: np.ndarray = train_kp
         self._val_image: np.ndarray = val_img_nrm
@@ -243,10 +261,18 @@ class DataPreprocessing:
         self._test_image: np.ndarray = test_img_nrm
         self._test_keypoints: np.ndarray = test_kp
 
+        # Set split flag on
         self._split = True
 
     @staticmethod
-    def _standard_normalization(images: np.ndarray, means: np.ndarray, stds: np.ndarray):
+    def _standard_normalization(images: np.ndarray, means: np.ndarray, stds: np.ndarray) -> np.ndarray:
+        """
+        Apply normalization to images to separate channels using given values for mean and standard deviation
+        :param images: array of images
+        :param means: mean value for every channel
+        :param stds: standard deviation for every channel
+        :return: normalized images
+        """
 
         normalized = []
 
@@ -277,15 +303,41 @@ class DataPreprocessing:
         hands = [self._hands.get_hand(idx=idx) for idx in idxs]
 
         images = np.array([np.array(hand.image) for hand in hands])
-        images = images.astype(np.float32) / 255.
 
         keypoints = np.array([hand.keypoints for hand in hands])
 
         return images, keypoints
+
+    def save(self):
+        """
+        Save dataset split to disk
+        """
+
+        self._check_split()
+
+        # Create directory
+        create_directory(path_=get_data_dir())
+
+        # Files
+        datas = [self.train, self.validation, self.test]
+
+        # Get file paths
+        train_fp, val_fp, test_fp = get_data_files()
+        fps = [train_fp, val_fp, test_fp]
+
+        # Save
+        log(info="Saving files")
+        for data, fp in zip(datas, fps):
+
+            data_x, data_y = data
+            fp_x, fp_y = fp
+
+            store_npy(path_=fp_x, arr=data_x)
+            store_npy(path_=fp_y, arr=data_y)
 
     def _check_split(self):
         """
         Check if split was performed
         """
         if not self._split:
-            raise Exception(f"Dataset was not split yet")
+            raise Exception(f"Dataset was not split yet. Use `split()` method to perform it")
