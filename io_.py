@@ -12,8 +12,8 @@ from os import path
 
 from PIL import Image
 
-from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, TRAINING_2D, DATA_DIR, \
-    TRAIN_NAME, VAL_NAME, TEST_NAME, VECTOR, LABELS
+from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA,\
+    TRAINING_2D, DATA_DIR, TRAIN_NAME, VAL_NAME, TEST_NAME, VECTOR, LABELS
 
 """ LOG """
 
@@ -222,7 +222,6 @@ def read_image(idx: int) -> Image:
     """
     Read an image from the directory given its index
     :param idx: image index
-    :param training: to load from training set (if false it load from test set)
     :return: image
     """
 

@@ -4,4 +4,4 @@
 
 * [Dataset download](https://lmb.informatik.uni-freiburg.de/resources/datasets/FreihandDataset.en.html)
 
-* [Dataset Github](https://github.com/lmb-freiburg/freihand)
+* [Dataset GitHub](https://github.com/lmb-freiburg/freihand)

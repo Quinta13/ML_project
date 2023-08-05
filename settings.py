@@ -42,7 +42,7 @@ LABELS = "labels"
 
 # Logging
 LOG: bool = True
-LOG_IO: bool = True
+LOG_IO: bool = False
 
 # Finger Names
 THUMB: str = "thumb"

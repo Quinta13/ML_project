@@ -6,11 +6,13 @@ from typing import List, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
-from io_ import read_json, get_training_2d, read_image, log
+from io_ import read_json, get_training_2d, read_image
 from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, NUM_KEYPOINTS
 
 
 class Hand:
+
+    # DUNDERS
 
     def __init__(self, idx: int, image: Image, keypoints: List[List]):
         """
@@ -42,6 +44,8 @@ class Hand:
         :return: string representation for the object
         """
         return str(self)
+
+    # PROPERTIES
 
     @property
     def is_raw(self) -> bool:
@@ -108,11 +112,12 @@ class Hand:
 
         return new_img
 
+    # HEATMAPS
+
     def get_heatmap(self, key: int) -> np.ndarray:
         """
         Returns the heatmap for given keypoint
         :param key: key index
-        :param sigma: sigma blur
         :return: keypoint heatmap array in scale [0, 1]
         """
 
@@ -130,15 +135,13 @@ class Hand:
     def heatmaps(self) -> np.ndarray:
         """
         Returns heatmaps of keypoints
-        :param key: key index
-        :param sigma: sigma blur
         :return: all heatmaps array in scale [0, 1]
         """
 
         return np.array([self.get_heatmap(key=i) for i in range(NUM_KEYPOINTS)])
 
     @staticmethod
-    def _draw_heatmap(heatmap: np.ndarray) -> Image:
+    def draw_heatmap(heatmap: np.ndarray) -> Image:
         """
         Draw heatmap given array of pixels in scale [0, 1]
         :param heatmap: heatmap array
@@ -154,11 +157,10 @@ class Hand:
         """
         Draws the heatmap for given keypoint
         :param key: key index
-        :param sigma: sigma blur
         :return: keypoint heatmap image
         """
 
-        return self._draw_heatmap(
+        return self.draw_heatmap(
             heatmap=self.get_heatmap(key=key)
         )
 
@@ -166,13 +168,12 @@ class Hand:
     def heatmaps_draw(self) -> Image:
         """
         Draws all the heatmaps
-        :param sigma: sigma blur
         :return: keypoint heatmaps image
         """
 
-        heatmap = np.sum(self.get_heatmaps(), axis=0)
+        heatmap = np.sum(self.heatmaps, axis=0)
 
-        return self._draw_heatmap(
+        return self.draw_heatmap(
             heatmap=heatmap
         )
 
@@ -181,9 +182,6 @@ class HandCollection:
 
     def __init__(self):
         """
-
-        :param only_raw: if to load only raw images
-        :param n: number of images to load, if given only_raw is ignored
         """
 
         self._keypoints: List[List[List[Tuple]]] = read_json(get_training_2d())
