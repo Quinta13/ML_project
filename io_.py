@@ -3,15 +3,17 @@ This file contains general purpose input/output function
 """
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
+import numpy as np
 import requests
 import zipfile
 from os import path
 
 from PIL import Image
 
-from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, TRAINING_2D
+from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, TRAINING_2D, DATA_DIR, \
+    TRAIN_NAME, VAL_NAME, TEST_NAME, VECTOR, LABELS
 
 """ LOG """
 
@@ -22,7 +24,7 @@ def log(info: str):
     :param info: information to be logged
     """
     if LOG:
-        print(info)
+        print(f"> {info}")
 
 
 def log_io(info: str):
@@ -31,10 +33,22 @@ def log_io(info: str):
     :param info: information to be logged
     """
     if LOG_IO:
-        print(info)
+        print(f"  > {info}")
 
 
 """ DIRECTORIES """
+
+
+def create_directory(path_: str):
+    """
+    Create directory if it doesn't exist
+    :param path_: directory path
+    """
+    if os.path.exists(path_):
+        log_io(f"Directory {path_} already exists ")
+    else:
+        os.makedirs(path_)
+        log_io(f"Created directory {path_}")
 
 
 def get_root_dir() -> str:
@@ -48,21 +62,21 @@ def get_dataset_dir() -> str:
     """
     :return: path to dataset directory
     """
-    return os.path.join(get_root_dir(), FREIHAND_DIR)
+    return path.join(get_root_dir(), FREIHAND_DIR)
 
 
 def get_training_dir() -> str:
     """
     :return: path to training directory
     """
-    return os.path.join(get_dataset_dir(), TRAINING)
+    return path.join(get_dataset_dir(), TRAINING)
 
 
-def get_test_dir() -> str:
+def get_data_dir() -> str:
     """
-    :return: path to test directory
+    :return: path do data directory
     """
-    return os.path.join(get_dataset_dir(), TEST)
+    return path.join(get_dataset_dir(), DATA_DIR)
 
 
 """ FILES """
@@ -72,7 +86,7 @@ def get_training_camera() -> str:
     """
     :return: path to training camera
     """
-    return os.path.join(get_dataset_dir(), TRAINING_CAMERA)
+    return path.join(get_dataset_dir(), TRAINING_CAMERA)
 
 
 def get_training_3d() -> str:
@@ -89,6 +103,21 @@ def get_training_2d() -> str:
     return os.path.join(get_dataset_dir(), TRAINING_2D)
 
 
+def get_data_files() -> List[Tuple[str, str]]:
+    """
+    :return: path to files for training, validation and test set
+    """
+
+    dir_ = get_data_dir()
+    ext = 'npy'
+
+    return [
+        (path.join(dir_, f"{name}-{VECTOR}.{ext}"),
+         path.join(dir_, f"{name}-{LABELS}.{ext}"))
+        for name in [TRAIN_NAME, VAL_NAME, TEST_NAME]
+    ]
+
+
 """ DOWNLOAD """
 
 
@@ -100,8 +129,7 @@ def download_zip(url: str, dir_: str):
     """
 
     # Create download directory if it doesn't exist
-    log_io(info=f"Creating directory {dir_} ")
-    os.makedirs(dir_, exist_ok=True)
+    create_directory(path_=dir_)
 
     # Download zip file
     log_io(info=f"Downloading file from {url} ")
@@ -133,7 +161,7 @@ def read_json(path_: str) -> Dict | List:
     log_io(info=f"Loading {path_} ")
 
     with open(path_) as json_file:
-        return json.load(json_file)
+        return json.load(fp=json_file)
 
 
 def store_json(path_: str, obj: Dict | List):
@@ -149,6 +177,30 @@ def store_json(path_: str, obj: Dict | List):
 
     with open(path_, 'w') as json_file:
         json_file.write(json_string)
+
+
+def read_npy(path_: str) -> np.ndarray:
+    """
+    Load numpy array from local .npy file
+    :param path_: path for .npy file
+    :return: numpy array
+    """
+
+    log_io(info=f"Loading {path_} ")
+
+    return np.load(file=path_)
+
+
+def store_npy(path_: str, arr: np.ndarray):
+    """
+    Stores given object as a json file
+    :param path_: path for .json file
+    :param arr: array to be stored
+    """
+
+    log_io(info=f"Saving {path_} ")
+
+    np.save(file=path_, arr=arr)
 
 
 """ IMAGE """
@@ -180,5 +232,3 @@ def read_image(idx: int) -> Image:
     img_path = path.join(dir_, file_)
 
     return _read_image(path_=img_path)
-
-#%%
