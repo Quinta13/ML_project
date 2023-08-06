@@ -280,8 +280,6 @@ class DataPreprocessing:
         val_img_nrm = self._standard_normalization(images=val_img, means=mean_ch, stds=std_ch)
         test_img_nrm = self._standard_normalization(images=test_img, means=mean_ch, stds=std_ch)
 
-        # ------ LABELS ------
-
         # Save results
         self._train_image = train_img_nrm
         self._train_heatmaps = train_hm
@@ -328,13 +326,27 @@ class DataPreprocessing:
         :return: tuple images - heatmaps
         """
 
-        hands = [self._hands.get_hand(idx=idx) for idx in idxs]
+        log_info = 100
 
-        images = np.array([np.array(hand.image) for hand in hands])
+        log(info="Reading files")
 
-        keypoints = np.array([hand.heatmaps for hand in hands])
+        images = []
+        heatmaps = []
 
-        return images, keypoints
+        for i, idx in enumerate(idxs):
+
+            if i % log_info == 0:
+                log(info=f" - processed [{i}/{len(idxs)}]")
+
+            hand = self._hands.get_hand(idx=i)
+
+            images.append(np.array(hand.image))
+            heatmaps.append(hand.heatmaps)
+
+        images = np.array(images)
+        heatmaps = np.array(heatmaps)
+
+        return images, heatmaps
 
     def _check_prepared(self):
         """
@@ -345,21 +357,21 @@ class DataPreprocessing:
 
     # PLOT
 
-    def plot_item(self, idx: int, set_: str = TRAIN_NAME):
+    def plot_item(self, idx: int, set_type: str = TRAIN_NAME):
         """
         Plot image and heatmaps of item and given set
         :param idx: element index in the set
-        :param set_: name of set (training, validation or test)
+        :param set_type: name of set (training, validation or test)
         """
 
-        if set_ == TRAIN_NAME:
+        if set_type == TRAIN_NAME:
             X, y = self.train
-        elif set_ == VAL_NAME:
+        elif set_type == VAL_NAME:
             X, y = self.validation
-        elif set_ == TEST_NAME:
+        elif set_type == TEST_NAME:
             X, y = self.validation
         else:
-            raise Exception(f"Invalid set name {set_}; choose one between [{TRAIN_NAME}; {VAL_NAME}; {TEST_NAME}]")
+            raise Exception(f"Invalid set name {set_type}; choose one between [{TRAIN_NAME}; {VAL_NAME}; {TEST_NAME}]")
 
         # Subplots side by side
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
