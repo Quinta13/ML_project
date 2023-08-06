@@ -12,7 +12,7 @@ from os import path
 
 from PIL import Image
 
-from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA,\
+from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, \
     TRAINING_2D, DATA_DIR, TRAIN_NAME, VAL_NAME, TEST_NAME, VECTOR, LABELS
 
 """ LOG """
@@ -24,7 +24,7 @@ def log(info: str):
     :param info: information to be logged
     """
     if LOG:
-        print(f"> {info}")
+        print(f"INFO: {info}")
 
 
 def log_io(info: str):
@@ -33,7 +33,7 @@ def log_io(info: str):
     :param info: information to be logged
     """
     if LOG_IO:
-        print(f"  > {info}")
+        print(f"I/O: {info}")
 
 
 """ DIRECTORIES """
@@ -55,7 +55,7 @@ def get_root_dir() -> str:
     """
     :return: path to root directory
     """
-    return os.getcwd()
+    return str(path.abspath(path.join(__file__, "../")))
 
 
 def get_dataset_dir() -> str:
