@@ -7,7 +7,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from io_ import read_json, get_training_2d, read_image
-from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, NUM_KEYPOINTS
+from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, NUM_KEYPOINTS, RADIUS, \
+    POINT
 
 
 class Hand:
@@ -97,6 +98,22 @@ class Hand:
 
         new_img = self.image.copy()
         draw = ImageDraw.Draw(new_img)
+
+        color_point = tuple(int(POINT[i:i + 2], 16) for i in (0, 2, 4)) + (0,)  # from hex to rgb
+
+        # Draw circles
+        for keypoint in self.keypoints:
+
+            x, y = keypoint
+
+            # Calculate the bounding box of the circle
+            x0 = x - RADIUS
+            y0 = y - RADIUS
+            x1 = x + RADIUS
+            y1 = y + RADIUS
+
+            # Draw the circle with the specified color and alpha
+            draw.ellipse([(x0, y0), (x1, y1)], fill=color_point)
 
         # Draw lines
         for finger in FINGERS:
