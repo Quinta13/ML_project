@@ -1,14 +1,15 @@
 """
 This file provides some utilities...
 """
-from typing import List
 
 import matplotlib.pyplot as plt
-from PIL import Image
+
+
+def pad_idx(idx: int) -> str:
+    return str(idx).zfill(8)
 
 
 def plot_multiple_images(images):
-
     # Set the number of columns for displaying the images
     num_columns = 6
 
@@ -37,3 +38,4 @@ def plot_multiple_images(images):
 
     # Display the images in a row
     plt.show()
+

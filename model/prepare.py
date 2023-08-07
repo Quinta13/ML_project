@@ -2,20 +2,21 @@
 This file contains classes to prepare dataset for Machine Learning model
 """
 from os import path
-import random
-from typing import Tuple, List
+from typing import List, Tuple, Iterator, Dict
 
 import numpy as np
-from matplotlib import pyplot as plt
 
-from io_ import get_dataset_dir, log, download_zip, get_training_2d, read_json, get_training_3d, get_training_camera, \
-    store_json, create_directory, get_data_dir, get_data_files, store_npy
+from io_ import log, download_zip, read_json, store_json, get_dataset_dir, get_2d_file, get_mean_std_file, log_progress
 from model.hand import HandCollection
-from settings import FREIHAND_URL, TOT_IMG, DATA, TRAINING, TRAIN_NAME, VAL_NAME, TEST_NAME, RAW
+from settings import FREIHAND_URL, FILE_3D, FILE_CAMERA, NEW_SIZE
 
 
 class FreiHANDDownloader:
-    
+    """
+    This class provides an interface to download FreiHAND dataset
+        and extract it to specific directory
+    """
+
     # DUNDERS
 
     def __str__(self) -> str:
@@ -30,14 +31,7 @@ class FreiHANDDownloader:
         """
         return str(self)
 
-    # PROPERTIES
-
-    @property
-    def dataset_dir(self) -> str:
-        """
-        :return: path to dataset directory
-        """
-        return get_dataset_dir()
+    # UTILS
 
     @property
     def is_downloaded(self) -> bool:
@@ -45,6 +39,13 @@ class FreiHANDDownloader:
         :return: if the dataset was downloaded yet
         """
         return path.exists(self.dataset_dir)
+
+    @property
+    def dataset_dir(self) -> str:
+        """
+        :return: path to dataset directory
+        """
+        return get_dataset_dir()
 
     # DOWNLOAD
 
@@ -65,6 +66,10 @@ class FreiHANDDownloader:
 
 
 class FreiHAND2DConverter:
+    """
+    This class provides an interface to convert 3-dimension points to 2-dimension ones
+        using camera information; the new points are stored locally
+    """
 
     # DUNDERS
 
@@ -80,14 +85,14 @@ class FreiHAND2DConverter:
         """
         return str(self)
 
-    # PROPERTIES
+    # UTILS
 
     @property
     def file_2d(self) -> str:
         """
         :return: path to 2-dimension points file
         """
-        return get_training_2d()
+        return get_2d_file()
 
     @property
     def is_converted(self) -> bool:
@@ -111,8 +116,12 @@ class FreiHAND2DConverter:
         log(info="Converting points to 2-dimension")
 
         # Loading json
-        xyz = np.array(read_json(get_training_3d()))
-        cameras = np.array(read_json(get_training_camera()))
+        dataset_dir = get_dataset_dir()
+        xyz_fp = path.join(dataset_dir, FILE_3D)
+        cameras_fp = path.join(dataset_dir, FILE_CAMERA)
+
+        xyz = np.array(read_json(xyz_fp))
+        cameras = np.array(read_json(cameras_fp))
 
         # Computing orientation
         uv = np.array([np.matmul(camera, xyz_.T).T for xyz_, camera in zip(xyz, cameras)])
@@ -124,295 +133,150 @@ class FreiHAND2DConverter:
         xy = [[[float(x), float(y)] for x, y in inner_list] for inner_list in xy]
 
         # Store information
-        store_json(path_=self.file_2d, obj=xy)
+        store_json(path_=get_2d_file(), obj=xy)
 
 
-class DataPreprocessing:
-    
-    # DUNDERS
+class FreiHANDSplit:
+    """
+    This class computes indexes for data split
+        and it provides the mean and standard deviation of training set
+    """
 
-    def __init__(self, data: int, train_prc: float,
-                 val_prc: float, test_prc: float, only_raw: bool = False):
+    def __init__(self, n: int, percentages: List[float]):
         """
-        :param data: length of data
-        :param train_prc: training set percentage
-        :param val_prc: validation set percentage
-        :param test_prc: test set percentage
-        :param only_raw: if to use only raw images
+        It uses as dataset the first n images
+        :param n: how many data in the dataset
+        :param percentages: percentages of train, validation and test for te split
         """
 
-        self._only_raw: bool = only_raw
+        # Sanity checks
+        if len(percentages) != 3:
+            raise Exception(f"Got {len(percentages)} percentages for split, but they must be 3 ")
 
-        # Hand collection
-        self._hands: HandCollection = HandCollection()
+        if abs(sum(percentages) - 1) > 1e-9:  # floating point precision
+            raise Exception(f"Invalid distribution [{percentages}] ")
 
-        # Percentage check
-        if abs(train_prc + val_prc + test_prc - 1) > 1e-9:  # floating point precision
-            raise Exception(f"Invalid distribution [{train_prc}; {val_prc}; {test_prc}] ")
+        train_prc, val_prc, test_prc = percentages
 
-        # Indexes
-        self._train_indexes: List[int]
-        self._val_indexes: List[int]
-        self._test_indexes: List[int]
-        self._train_indexes, self._val_indexes, self._test_indexes = \
-            self._create_partitions(data=data, train_prc=train_prc, val_prc=val_prc, test_prc=test_prc)
+        # Computing lengths
+        train_len: int = int(n * train_prc)
+        val_len: int = int(n * val_prc)
+        test_len: int = n - (train_len + val_len)  # ensures a round split
 
-        # Splits - initialized after prepare method invocation
-        self._train_image: np.ndarray | None = None
-        self._train_heatmaps: np.ndarray | None = None
-        self._val_image: np.ndarray | None = None
-        self._val_heatmaps: np.ndarray | None = None
-        self._test_image: np.ndarray | None = None
-        self._test_heatmaps: np.ndarray | None = None
+        # Getting indexes
+        self._train_idx: Tuple[int, int] = (0, train_len)
+        self._val_idx: Tuple[int, int] = (train_len, train_len + val_len)
+        self._test_idx: Tuple[int, int] = (n - test_len, n)
 
-        self._prepared: bool = False
+    def __len__(self) -> int:
+        """
+        :return: total length of splits
+        """
+        return self.train_len + self.val_len + self.test_len
 
     def __str__(self) -> str:
         """
         :return: string representation for the object
         """
-
-        train_len, val_len, test_len = self.lens
-        return f"DataPreprocessing [Train: {train_len}; Validation: {val_len}; Test: {test_len} - "\
-               f"Only raw: {self._only_raw}]"
+        return f"FreiHANDSplit[Train: {self.train_len}; Validation: {self.val_len}; Test: {self.test_len}]"
 
     def __repr__(self) -> str:
         """
         :return: string representation for the object
         """
         return str(self)
-    
-    # PROPERTIES
 
     @property
-    def train(self) -> Tuple[np.ndarray, np.ndarray]:
+    def train_idx(self) -> Tuple[int, int]:
         """
-        :return: training set
+        :return: training set index boundaries
         """
-        self._check_prepared()
-        return self._train_image, self._train_heatmaps
+        return self._train_idx
 
     @property
-    def validation(self) -> Tuple[np.ndarray, np.ndarray]:
+    def val_idx(self) -> Tuple[int, int]:
         """
-        :return: training set
+        :return: validation set index boundaries
         """
-        self._check_prepared()
-        return self._val_image, self._val_heatmaps
+        return self._val_idx
 
     @property
-    def test(self) -> Tuple[np.ndarray, np.ndarray]:
+    def test_idx(self) -> Tuple[int, int]:
         """
-        :return: training set
+        :return: test set index boundaries
         """
-        self._check_prepared()
-        return self._test_image, self._test_heatmaps
+        return self._test_idx
 
     @property
-    def lens(self) -> Tuple[int, int, int]:
+    def train_len(self) -> int:
         """
-        :return: training, validation and test set lengths
+        :return: train length
         """
-        return len(self._train_indexes), len(self._val_indexes), len(self._test_indexes)
+        return self._interval_len(ab=self.train_idx)
 
-    def _create_partitions(self, data: int, train_prc: float,
-                           val_prc: float, test_prc: float) -> Tuple[List[int], List[int], List[int]]:
+    @property
+    def val_len(self) -> int:
         """
-        Create random data partitions basing on given data and percentages
-        :param data: length of data
-        :param train_prc: training set percentage
-        :param val_prc: validation set percentage
-        :param test_prc: test set percentage
+        :return: train length
         """
+        return self._interval_len(ab=self.val_idx)
 
-        # All possible indexes, depends on only raw hyperparameter
-        items = RAW if self._only_raw else TOT_IMG
-
-        if items < DATA:
-            raise Exception(f"Asked for {DATA} items, but only have {items} ")
-
-        all_indexes = [i for i in range(items)]
-
-        # Randomly select only given number of images
-        random.shuffle(all_indexes)
-        data_indexes = all_indexes[:DATA]
-
-        # Computing length of partitions
-        train_len = int(data * train_prc)
-        val_len = int(data * val_prc)
-        test_len = int(data * test_prc)
-
-        # Computing slices
-        train_indexes = data_indexes[:train_len]
-        val_indexes = data_indexes[train_len:(train_len + val_len)]
-        test_indexes = data_indexes[-test_len:]
-
-        return train_indexes, val_indexes, test_indexes
-
-    # PREPARATION
-
-    def prepare(self):
+    @property
+    def test_len(self) -> int:
         """
-        Prepare data applying min-max scaling and normalization over channels
+        :return: train length
         """
-
-        # Getting images and keypoints
-        log(info="Loading Training set")
-        train_img, train_hm = self._load_images_heatmaps(idxs=self._train_indexes)
-        log(info="Loading Validation set")
-        val_img, val_hm = self._load_images_heatmaps(idxs=self._val_indexes)
-        log(info="Loading Test set")
-        test_img, test_hm = self._load_images_heatmaps(idxs=self._test_indexes)
-
-        # Normalization in [0, 1]
-        log(info="Applying mix-max scaling")
-        train_img = train_img.astype(np.float32) / 255.
-        val_img = val_img.astype(np.float32) / 255.
-        test_img = test_img.astype(np.float32) / 255.
-
-        # Computing mean and stds of training set per channel
-        mean_ch = np.mean(train_img, axis=(0, 1, 2))
-        std_ch = np.std(train_img, axis=(0, 1, 2))
-
-        # Normalize
-        log(info="Applying normalization")
-        train_img_nrm = self._standard_normalization(images=train_img, means=mean_ch, stds=std_ch)
-        val_img_nrm = self._standard_normalization(images=val_img, means=mean_ch, stds=std_ch)
-        test_img_nrm = self._standard_normalization(images=test_img, means=mean_ch, stds=std_ch)
-
-        # Save results
-        self._train_image = train_img_nrm
-        self._train_heatmaps = train_hm
-        self._val_image = val_img_nrm
-        self._val_heatmaps = val_hm
-        self._test_image = test_img_nrm
-        self._test_heatmaps = test_hm
-
-        # Set prepared flag on
-        self._prepared = True
+        return self._interval_len(ab=self.test_idx)
 
     @staticmethod
-    def _standard_normalization(images: np.ndarray, means: np.ndarray, stds: np.ndarray) -> np.ndarray:
+    def _interval_len(ab: Tuple[int, int]) -> int:
         """
-        Apply normalization to images to separate channels using given values for mean and standard deviation
-        :param images: array of images
-        :param means: mean value for every channel
-        :param stds: standard deviation for every channel
-        :return: normalized images
+        Return the length of an interval
+        :param ab: interval
+        :return: interval length
         """
+        a, b = ab
+        return b - a
 
-        normalized = []
-
-        for image in images:
-            # Separate the RGB channels
-            r_channel, g_channel, b_channel = image[:, :, 0], image[:, :, 1], image[:, :, 2]
-
-            # Standard normalize each channel using the provided means and stds
-            r_channel = (r_channel - means[0]) / stds[0]
-            g_channel = (g_channel - means[1]) / stds[1]
-            b_channel = (b_channel - means[2]) / stds[2]
-
-            # Merge the normalized channels back into an image
-            normalized_array = np.stack((r_channel, g_channel, b_channel), axis=-1)
-
-            normalized.append(normalized_array)
-
-        return np.array(normalized)
-
-    def _load_images_heatmaps(self, idxs: List[int]) -> Tuple[np.ndarray, np.ndarray]:
+    def training_mean_std(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Load images as arrays and associated labels
-        :param idxs: indexes to load
-        :return: tuple images - heatmaps
+        Computes mean and standard deviation over the training set
+            for every channel of min-max scaled images
+        Store the values in a .json file
+        :return: means and standard deviations for every channel
         """
 
-        log_info = 100
+        channel_sum = np.zeros(3)  # for the mean
+        channel_sum_squared = np.zeros(3)  # for the standard deviation
 
-        log(info="Reading files")
+        collection = HandCollection()
 
-        images = []
-        heatmaps = []
+        a, b = self.train_idx
 
-        for i, idx in enumerate(idxs):
+        for train_idx in range(a, b):
 
-            if i % log_info == 0:
-                log(info=f" - processed [{i}/{len(idxs)}]")
+            log_progress(idx=train_idx, max_=self.train_len, ckp=500)
 
-            hand = self._hands.get_hand(idx=i)
+            img_arr = collection.get_hand(idx=train_idx).image_arr_mm  # we apply mix-max scaling
 
-            images.append(np.array(hand.image))
-            heatmaps.append(hand.heatmaps)
+            channel_sum += np.sum(img_arr, axis=(0, 1))
+            channel_sum_squared += np.sum(img_arr ** 2, axis=(0, 1))
 
-        images = np.array(images)
-        heatmaps = np.array(heatmaps)
+        # Get the total number of pixels
+        total_pixels = NEW_SIZE * NEW_SIZE * self.train_len
 
-        return images, heatmaps
+        # Computing mean and standard deviation
+        channel_mean = channel_sum / total_pixels
+        channel_std = np.sqrt((channel_sum_squared / total_pixels) - channel_mean ** 2)
 
-    def _check_prepared(self):
-        """
-        Check if prepared was performed
-        """
-        if not self._prepared:
-            raise Exception(f"Dataset was not prepared yet. Use `prepare()` method to perform it")
+        mean_std = {
+            "mean": list(channel_mean),
+            "std": list(channel_std)
+        }
 
-    # PLOT
+        store_json(
+            path_=get_mean_std_file(),
+            obj=mean_std
+        )
 
-    def plot_item(self, idx: int, set_type: str = TRAIN_NAME):
-        """
-        Plot image and heatmaps of item and given set
-        :param idx: element index in the set
-        :param set_type: name of set (training, validation or test)
-        """
-
-        if set_type == TRAIN_NAME:
-            X, y = self.train
-        elif set_type == VAL_NAME:
-            X, y = self.validation
-        elif set_type == TEST_NAME:
-            X, y = self.validation
-        else:
-            raise Exception(f"Invalid set name {set_type}; choose one between [{TRAIN_NAME}; {VAL_NAME}; {TEST_NAME}]")
-
-        # Subplots side by side
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Plot the RGB image in the first subplot
-        axes[0].imshow(X[idx])
-        axes[0].set_title('Feature vector - Image')
-        axes[0].axis('off')
-
-        heatmap = np.sum(y[idx], axis=0)
-        # Plot the grayscale image in the second subplot
-        axes[1].imshow(heatmap, cmap='gray')
-        axes[1].set_title('Labels - Heatmaps')
-        axes[1].axis('off')
-
-        return fig
-
-    # SAVE
-
-    def save(self):
-        """
-        Save dataset to disk
-        """
-
-        self._check_prepared()
-
-        # Create directory
-        create_directory(path_=get_data_dir())
-
-        # Files
-        datas = [self.train, self.validation, self.test]
-
-        # Get file paths
-        train_fp, val_fp, test_fp = get_data_files()
-        fps = [train_fp, val_fp, test_fp]
-
-        # Save
-        log(info="Saving files")
-        for data, fp in zip(datas, fps):
-            data_x, data_y = data
-            fp_x, fp_y = fp
-
-            store_npy(path_=fp_x, arr=data_x)
-            store_npy(path_=fp_y, arr=data_y)
+        return channel_mean, channel_std

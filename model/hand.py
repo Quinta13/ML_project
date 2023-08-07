@@ -6,29 +6,38 @@ from typing import List, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
-from io_ import read_json, get_training_2d, read_image
-from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, NUM_KEYPOINTS, RADIUS, \
-    POINT
+from io_ import read_json, read_image, get_2d_file
+from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, RADIUS, \
+    POINT, NUM_KEYPOINTS
+from utlis import pad_idx
 
 
 class Hand:
 
+    """
+    This class read information about an Hand in terms of image and keypoints, moreover it can
+        - apply Z-transformation to images
+        - generate heatmaps for the keypoints
+    """
+
+
     # DUNDERS
 
-    def __init__(self, idx: int, image: Image, keypoints: List[List]):
+    def __init__(self, idx: int, image: Image, keypoints: List[List[float]]):
         """
-
+        It read the image and get the keypoints,
+            it rescale them to NEW_SIZE from settings
         :param idx: image dataset index
         :param image: image
         :param keypoints: keypoints
         """
 
         # Pad to 8 digits
-        self._idx: str = str(idx).zfill(8)
+        self._idx: str = pad_idx(idx=idx)
 
         # Resize to NEW_SIZE
         self._image: Image = image.resize((NEW_SIZE, NEW_SIZE))
-        self._keypoints: List[Tuple] = [
+        self._keypoints: List[Tuple[float, float]] = [
             (float(kp_x * NEW_SIZE / ORIGINAL_SIZE),
              float(kp_y * NEW_SIZE / ORIGINAL_SIZE))
             for kp_x, kp_y in keypoints
@@ -75,6 +84,41 @@ class Hand:
         :return: image
         """
         return self._image
+
+    @property
+    def image_arr(self) -> np.ndarray:
+        """
+        :return: image as array
+        """
+        return np.array(self._image).astype(dtype=np.float32)
+
+    @property
+    def image_arr_mm(self) -> np.ndarray:
+        """
+        :return: image min-max scaled
+        """
+        return self.image_arr / 255
+
+    def image_arr_z(self, means: np.ndarray, stds: np.ndarray) -> np.ndarray:
+        """
+        :param means: mean for every channel
+        :param stds: standard deviation for every channel
+        :return: Z-transformation to image
+        """
+
+        img = self.image_arr_mm
+
+        r_channel, g_channel, b_channel = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+
+        # Z-transform each channel with means and stds
+        r_channel = (r_channel - means[0]) / stds[0]
+        g_channel = (g_channel - means[1]) / stds[1]
+        b_channel = (b_channel - means[2]) / stds[2]
+
+        # Merge back into an image
+        img_z = np.stack((r_channel, g_channel, b_channel), axis=-1)
+
+        return img_z
 
     @property
     def image_info(self) -> str:
@@ -170,7 +214,7 @@ class Hand:
         # Convert the scaled array to a Pillow image with 'L' mode (grayscale)
         return Image.fromarray(scaled_image_array, mode='L')
 
-    def heatmap_draw(self, key: int) -> Image:
+    def get_heatmap_draw(self, key: int) -> Image:
         """
         Draws the heatmap for given keypoint
         :param key: key index
@@ -181,8 +225,40 @@ class Hand:
             heatmap=self.get_heatmap(key=key)
         )
 
-    @property
-    def heatmaps_draw(self) -> Image:
+    def plot(self, means: np.ndarray, stds: np.ndarray):
+        """
+        Draws
+        :param means: mean for every channel
+        :param stds: standard deviation for every channel
+        """
+
+        from matplotlib import pyplot as plt
+
+        # Subplots
+        fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+
+        # Plot original image
+        axes[0][0].imshow(self.image)
+        axes[0][0].set_title('Original Image')
+        axes[0][0].axis('off')
+
+        # Plot original image
+        axes[0][1].imshow(self.skeleton)
+        axes[0][1].set_title('Skeleton')
+        axes[0][1].axis('off')
+
+        # Plot Z-transformation
+        axes[1][0].imshow(self.image_arr_z(means=means, stds=stds))
+        axes[1][0].set_title('Feature vector')
+        axes[1][0].axis('off')
+
+        # Plot heatmaps
+        heatmap = np.sum(self.heatmaps, axis=0)
+        axes[1][1].imshow(heatmap, cmap='gray')
+        axes[1][1].set_title('Labels - Heatmaps')
+        axes[1][1].axis('off')
+
+    def get_heatmaps_draw(self) -> Image:
         """
         Draws all the heatmaps
         :return: keypoint heatmaps image
@@ -197,11 +273,19 @@ class Hand:
 
 class HandCollection:
 
+    """
+    This class automatizes Hand class generation:
+     - it keeps in memory keypoint file
+     - it automatizes raw-augmented labeling handling
+    """
+
     def __init__(self):
         """
+        It basically reads keypoints file
         """
 
-        self._keypoints: List[List[List[Tuple]]] = read_json(get_training_2d())
+        # we keep the file in memory and we read once
+        self._keypoints: List[List[List[float]]] = read_json(get_2d_file())
 
     def __str__(self) -> str:
         """
@@ -221,4 +305,8 @@ class HandCollection:
         :param idx: index
         :return: hand
         """
-        return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[idx % RAW])
+
+        # augmented labels are the same as raw ones
+        actual_idx = idx % RAW
+
+        return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[actual_idx])

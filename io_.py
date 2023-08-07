@@ -3,17 +3,16 @@ This file contains general purpose input/output function
 """
 import json
 import os
+import zipfile
+from os import path
 from typing import Dict, List, Tuple
 
 import numpy as np
 import requests
-import zipfile
-from os import path
-
 from PIL import Image
 
-from settings import FREIHAND_DIR, LOG, LOG_IO, TRAINING, IMG_EXT, TRAINING_3D, TRAINING_CAMERA, \
-    TRAINING_2D, DATA_DIR, TRAIN_NAME, VAL_NAME, TEST_NAME, VECTOR, LABELS
+from settings import LOG, LOG_IO, IMG_EXT, FREIHAND_DIR, FILE_2D, IMAGES, FILE_MEAN_STD
+from utlis import pad_idx
 
 """ LOG """
 
@@ -34,6 +33,17 @@ def log_io(info: str):
     """
     if LOG_IO:
         print(f"I/O: {info}")
+
+
+def log_progress(idx: int, max_: int, ckp: int = 100):
+    """
+    It logs progress over iterations
+    :param idx: current iteration
+    :param max_: maximum number of iteration
+    :param ckp: checkpoint when to log
+    """
+    if idx % ckp == 0:
+        log(info=f"[{idx}/{max_}] - {idx * 100 / max_:.2f}%")
 
 
 """ DIRECTORIES """
@@ -60,62 +70,41 @@ def get_root_dir() -> str:
 
 def get_dataset_dir() -> str:
     """
-    :return: path to dataset directory
+    :return: path to root directory
     """
     return path.join(get_root_dir(), FREIHAND_DIR)
 
 
-def get_training_dir() -> str:
+def get_images_dir() -> str:
     """
-    :return: path to training directory
+    :return: path to image directory
     """
-    return path.join(get_dataset_dir(), TRAINING)
+    return path.join(get_dataset_dir(), IMAGES)
 
 
-def get_data_dir() -> str:
+def get_2d_file() -> str:
     """
-    :return: path do data directory
+    :return: path to 2-dimension file
     """
-    return path.join(get_dataset_dir(), DATA_DIR)
+    return path.join(get_dataset_dir(), FILE_2D)
 
 
-""" FILES """
-
-
-def get_training_camera() -> str:
+def get_mean_std_file() -> str:
     """
-    :return: path to training camera
+    :return: path to mean and standard deviation file
     """
-    return path.join(get_dataset_dir(), TRAINING_CAMERA)
+    return path.join(get_dataset_dir(), FILE_MEAN_STD)
 
 
-def get_training_3d() -> str:
+def read_means_stds() -> Tuple[np.ndarray, np.ndarray]:
     """
-    :return: path to training 3d points
+    :return: means and standard deviations as arrays
     """
-    return os.path.join(get_dataset_dir(), TRAINING_3D)
+    means_stds = read_json(path_=get_mean_std_file())
 
+    means, stds = means_stds.values()
 
-def get_training_2d() -> str:
-    """
-    :return: path to training 2d points
-    """
-    return os.path.join(get_dataset_dir(), TRAINING_2D)
-
-
-def get_data_files() -> List[Tuple[str, str]]:
-    """
-    :return: path to files for training, validation and test set
-    """
-
-    dir_ = get_data_dir()
-    ext = 'npy'
-
-    return [
-        (path.join(dir_, f"{name}-{VECTOR}.{ext}"),
-         path.join(dir_, f"{name}-{LABELS}.{ext}"))
-        for name in [TRAIN_NAME, VAL_NAME, TEST_NAME]
-    ]
+    return np.array(means), np.array(stds)
 
 
 """ DOWNLOAD """
@@ -179,30 +168,6 @@ def store_json(path_: str, obj: Dict | List):
         json_file.write(json_string)
 
 
-def read_npy(path_: str) -> np.ndarray:
-    """
-    Load numpy array from local .npy file
-    :param path_: path for .npy file
-    :return: numpy array
-    """
-
-    log_io(info=f"Loading {path_} ")
-
-    return np.load(file=path_)
-
-
-def store_npy(path_: str, arr: np.ndarray):
-    """
-    Stores given object as a json file
-    :param path_: path for .json file
-    :param arr: array to be stored
-    """
-
-    log_io(info=f"Saving {path_} ")
-
-    np.save(file=path_, arr=arr)
-
-
 """ IMAGE """
 
 
@@ -225,8 +190,8 @@ def read_image(idx: int) -> Image:
     :return: image
     """
 
-    file_ = f"{str(idx).zfill(8)}.{IMG_EXT}"
-    dir_ = get_training_dir()
+    file_ = f"{pad_idx(idx=idx)}.{IMG_EXT}"
+    dir_ = get_images_dir()
 
     img_path = path.join(dir_, file_)
 

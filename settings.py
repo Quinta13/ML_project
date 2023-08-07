@@ -7,47 +7,38 @@ from typing import Dict, List, Tuple
 
 import torch
 
-# Dataset download
-FREIHAND_URL: str = "https://lmb.informatik.uni-freiburg.de/data/freihand/FreiHAND_pub_v2.zip"
-FREIHAND_DIR: str = "FreiHAND"
+""" --------------- LOGGING --------------- """
 
-IMG_EXT: str = "jpg"
-ORIGINAL_SIZE: int = 224
-NEW_SIZE: int = 128
-
-RAW = 32560
-AUGMENTED = 3
-TOT_IMG = RAW * (AUGMENTED + 1)
-
-# Training
-TRAINING: str = path.join("training", "rgb")
-TRAINING_3D: str = "training_xyz.json"
-TRAINING_2D: str = "training_xy.json"
-TRAINING_CAMERA: str = "training_K.json"
+LOG: bool = True  # if to log logic operation
+LOG_IO: bool = False  # if to log i/o operation
 
 
-# Train - Test - Validation
+""" ------------------------------- DIRECTORIES ------------------------------- """
 
-DATA = 32560
+FREIHAND_DIR: str = "FreiHAND"  # directory where to store the dataset
+IMAGES: str = path.join("training", "rgb")  # directory where images are located
 
-TRAIN_PRC = .7
-TEST_PRC = .1
-VAL_PRC = .2
 
-DATA_DIR = "data"
+""" --------------- FILE NAMES (including extensions) ---------------- """
+FILE_3D: str = "training_xyz.json"  # info about the camera
+FILE_CAMERA: str = "training_K.json"  # info about 3d points
+FILE_2D: str = "training_xy.json"  # info about 2d points (generated)
+FILE_MEAN_STD: str = "mean_std.json"  # info about training set means and standard deviations (generated)
 
-TRAIN_NAME = "training"
-VAL_NAME = "validation"
-TEST_NAME = "test"
 
-VECTOR = "images"
-LABELS = "labels"
+""" --------------------------------------------- DATASET INFORMATION --------------------------------------------- """
 
-# Logging
-LOG: bool = True
-LOG_IO: bool = False
+# IMAGES
+FREIHAND_URL: str = "https://lmb.informatik.uni-freiburg.de/data/freihand/FreiHAND_pub_v2.zip"  # dataset download url
+IMG_EXT: str = "jpg"  # images extension
+ORIGINAL_SIZE: int = 224  # original size of images
+RAW: int = 32560  # how many raw images
+AUGMENTED = 3  # how many augmented version per raw image
+TOT_IMG = RAW * (AUGMENTED + 1)  # total number of images (raw + augmented)
 
-# Finger Names
+# FINGERS
+NUM_KEYPOINTS = 21
+
 THUMB: str = "thumb"
 INDEX: str = "index"
 MIDDLE: str = "middle"
@@ -56,24 +47,7 @@ LITTLE: str = "little"
 
 FINGERS = [THUMB, INDEX, MIDDLE, RING, LITTLE]
 
-# Finger colors
-POINT: str = "383838"
-RADIUS = 1.5
-
-COLORS: Dict[str, str] = {
-    THUMB: "008000",
-    INDEX: "00FFFF",
-    MIDDLE: "0000FF",
-    RING: "FF00FF",
-    LITTLE: "FF0000"
-}
-
-# Finger connections
-NUM_KEYPOINTS = 21
-
-WIDTH = 2
-SIGMA_BLUR = 1.0
-
+# CONNECTIONS
 LINES: Dict[str, List[Tuple[int, int]]] = {
     THUMB: [(0, 1), (1, 2), (2, 3), (3, 4)],
     INDEX: [(0, 5), (5, 6), (6, 7), (7, 8)],
@@ -82,9 +56,48 @@ LINES: Dict[str, List[Tuple[int, int]]] = {
     LITTLE: [(0, 17), (17, 18), (18, 19), (19, 20)],
 }
 
-# ML model
+
+""" --------------- DATASET PREPARATION --------------- """
+DATA: int = 500  # data used for the model
+
+NEW_SIZE: int = 128  # new image size
+SIGMA_BLUR: float = 1.0  # heatmap blur
+
+TRAIN_PRC: float = .7 # percentage of training set
+VALIDATION_PRC: float = .2  # percentage of validation set
+TEST_PRC: float = .1  # percentage of test set
+
+PRC: List[float] = [TRAIN_PRC, VALIDATION_PRC, TEST_PRC]
+
+
+""" -- TRAIN, VALIDATION and TEST -- """
+
+TRAIN_NAME = "training"
+VALIDATION_NAME = "validation"
+TEST_NAME = "test"
+
+
+""" -------------- DRAW STYLE -------------- """
+
+# KEYPOINTS
+POINT: str = "383838"  # keypoint color
+RADIUS: float = 1.5  # keypoint radius
+
+# CONNECTIONS
+WIDTH: int = 2  # width of connections
+
+COLORS: Dict[str, str] = {  # Connection colors
+    THUMB: "008000",
+    INDEX: "00FFFF",
+    MIDDLE: "0000FF",
+    RING: "FF00FF",
+    LITTLE: "FF0000"
+}
+
+""" ------------------ ML MODEL ------------------ """
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-N_EPOCHS = 500
-BATCH_SIZE = 45
-BATCHES_PER_EPOCH = 50
-BATCHES_PER_EPOCH_VAL = 20
+N_EPOCHS: int = 500
+BATCH_SIZE: int = 10
+BATCHES_PER_EPOCH: int = 5
+BATCHES_PER_EPOCH_VAL: int = 2
