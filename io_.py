@@ -43,7 +43,7 @@ def log_progress(idx: int, max_: int, ckp: int = 100):
     :param ckp: checkpoint when to log
     """
     if idx % ckp == 0:
-        log(info=f"[{idx}/{max_}] - {idx * 100 / max_:.2f}%")
+        log(info=f"Progress: [{idx}/{max_}] - {idx * 100 / max_:.2f}%")
 
 
 """ DIRECTORIES """

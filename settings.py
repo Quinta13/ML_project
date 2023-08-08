@@ -28,10 +28,12 @@ FILE_MEAN_STD: str = "mean_std.json"  # info about training set means and standa
 
 """ --------------------------------------------- DATASET INFORMATION --------------------------------------------- """
 
-# IMAGES
 FREIHAND_URL: str = "https://lmb.informatik.uni-freiburg.de/data/freihand/FreiHAND_pub_v2.zip"  # dataset download url
-IMG_EXT: str = "jpg"  # images extension
+
+# IMAGES
 ORIGINAL_SIZE: int = 224  # original size of images
+IMG_EXT: str = "jpg"  # images extension
+
 RAW: int = 32560  # how many raw images
 AUGMENTED = 3  # how many augmented version per raw image
 TOT_IMG = RAW * (AUGMENTED + 1)  # total number of images (raw + augmented)
@@ -58,14 +60,14 @@ LINES: Dict[str, List[Tuple[int, int]]] = {
 
 
 """ --------------- DATASET PREPARATION --------------- """
-DATA: int = 500  # data used for the model
+DATA: int = RAW  # data used for the model
 
 NEW_SIZE: int = 128  # new image size
-SIGMA_BLUR: float = 1.0  # heatmap blur
+SIGMA_BLUR: float = 3.0  # heatmap blur
 
-TRAIN_PRC: float = .7 # percentage of training set
-VALIDATION_PRC: float = .2  # percentage of validation set
-TEST_PRC: float = .1  # percentage of test set
+TRAIN_PRC: float = 0.7985257985257985  # percentage of training set
+VALIDATION_PRC: float = 0.15356265356265356  # percentage of validation set
+TEST_PRC: float = 0.04791154791154791  # percentage of test set
 
 PRC: List[float] = [TRAIN_PRC, VALIDATION_PRC, TEST_PRC]
 
@@ -96,8 +98,10 @@ COLORS: Dict[str, str] = {  # Connection colors
 
 """ ------------------ ML MODEL ------------------ """
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-N_EPOCHS: int = 500
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+NEURONS: int = 16
+"""N_EPOCHS: int = 500
 BATCH_SIZE: int = 10
 BATCHES_PER_EPOCH: int = 5
-BATCHES_PER_EPOCH_VAL: int = 2
+BATCHES_PER_EPOCH_VAL: int = 2"""
