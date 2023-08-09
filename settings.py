@@ -17,6 +17,7 @@ LOG_IO: bool = False  # if to log i/o operation
 
 FREIHAND_DIR: str = "FreiHAND"  # directory where to store the dataset
 IMAGES: str = path.join("training", "rgb")  # directory where images are located
+MODEL: str = "model"  # directory where models are saved
 
 
 """ --------------- FILE NAMES (including extensions) ---------------- """
@@ -98,10 +99,16 @@ COLORS: Dict[str, str] = {  # Connection colors
 
 """ ------------------ ML MODEL ------------------ """
 
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 NEURONS: int = 16
-"""N_EPOCHS: int = 500
-BATCH_SIZE: int = 10
-BATCHES_PER_EPOCH: int = 5
-BATCHES_PER_EPOCH_VAL: int = 2"""
+
+N_EPOCHS: int = 1000
+LEARNING_RATE: float = 0.1
+
+BATCH_SIZE: int = 48
+BATCHES_PER_EPOCH: int = 50
+BATCHES_PER_EPOCH_VAL: int = 20
+
+MODEL_FILE = "model"
+LOSS_FILE = "loss.json"

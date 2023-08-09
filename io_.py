@@ -11,7 +11,7 @@ import numpy as np
 import requests
 from PIL import Image
 
-from settings import LOG, LOG_IO, IMG_EXT, FREIHAND_DIR, FILE_2D, IMAGES, FILE_MEAN_STD
+from settings import LOG, LOG_IO, IMG_EXT, FREIHAND_DIR, FILE_2D, IMAGES, FILE_MEAN_STD, MODEL, LOSS_FILE
 from utlis import pad_idx
 
 """ LOG """
@@ -82,6 +82,13 @@ def get_images_dir() -> str:
     return path.join(get_dataset_dir(), IMAGES)
 
 
+def get_model_dir() -> str:
+    """
+    :return: path to model directory
+    """
+    return path.join(get_dataset_dir(), MODEL)
+
+
 def get_2d_file() -> str:
     """
     :return: path to 2-dimension file
@@ -94,6 +101,21 @@ def get_mean_std_file() -> str:
     :return: path to mean and standard deviation file
     """
     return path.join(get_dataset_dir(), FILE_MEAN_STD)
+
+
+def get_loss_file() -> str:
+    """
+    :return: path to loss file
+    """
+    return path.join(get_model_dir(), LOSS_FILE)
+
+
+def get_model_file(suffix: str = "final") -> str:
+    """
+    :param: suffix for the name of file indicative of the model
+    :return: path to mean and standard deviation file
+    """
+    return path.join(get_model_dir(), f"{MODEL}_{suffix}")
 
 
 def read_means_stds() -> Tuple[np.ndarray, np.ndarray]:
