@@ -355,7 +355,7 @@ class FreiHANDDataset(Dataset):
         return {
             "image": X,
             "heatmaps": y,
-            "image_raw": hand.idx,
+            "image_name": hand.idx,
         }
 
     @property

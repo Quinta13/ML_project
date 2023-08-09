@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 from io_ import read_json, read_image, get_2d_file
 from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, RADIUS, \
-    POINT, NUM_KEYPOINTS
+    POINT, NUM_KEYPOINTS, IMG_EXT
 from utlis import pad_idx
 
 
@@ -76,7 +76,7 @@ class Hand:
         """
         :return: image dataset index
         """
-        return self._idx
+        return f"{self._idx}.{IMG_EXT}"
 
     @property
     def image(self) -> Image:
