@@ -81,6 +81,12 @@ class IoULoss(nn.Module):
         super(IoULoss, self).__init__()
         self.EPSILON = 1e-6
 
+    def __str__(self):
+        return "IoULoss"
+
+    def __repr__(self):
+        return str(self)
+
     def _op_sum(self, x):
         return x.sum(-1).sum(-1)
 
