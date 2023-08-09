@@ -1,113 +1,153 @@
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
-from io_ import log_progress
+from io_ import log_progress, log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file
+from settings import DEVICE
 
 
 class Trainer:
-    def __init__(self, model, criterion, optimizer, config, scheduler=None):
-        self.model = model
-        self.criterion = criterion
-        self.optimizer = optimizer
-        self.loss = {"train": [], "val": []}
-        self.epochs = config["epochs"]
-        self.batches_per_epoch = config["batches_per_epoch"]
-        self.batches_per_epoch_val = config["batches_per_epoch_val"]
-        self.device = config["device"]
-        self.scheduler = scheduler
-        self.checkpoint_frequency = 100
-        self.early_stopping_epochs = 10
-        self.early_stopping_avg = 10
-        self.early_stopping_precision = 5
+    _CHECKPOINT_FREQUENCY = 100
+    _EARLY_STOPPING_EPOCHS = 10
+    _EARLY_STOPPING_AVG = 10
+    _EARLY_STOPPING_PRECISION = 5
+
+    def __init__(self, model, criterion, optimizer, epochs, batches_per_epoch, batches_per_epoch_val, scheduler=None):
+
+        self._model = model
+        self._criterion = criterion
+        self._optimizer = optimizer
+        self._scheduler = scheduler
+
+        self._device = DEVICE
+
+        self._epochs = epochs
+        self._batches_per_epoch = batches_per_epoch
+        self._batches_per_epoch_val = batches_per_epoch_val
+
+        self._loss = {"train": [], "val": []}
+
+    def __str__(self) -> str:
+        return f"Trainer [Epochs: {self._epochs}; Batches per Epoch: {self._batches_per_epoch}; " \
+               f"Batches per Epoch Validation: {self._batches_per_epoch_val}]"
+
+    def __repr__(self) -> str:
+        return str(self)
 
     def train(self, train_dataloader, val_dataloader):
-        for epoch in range(self.epochs):
+
+        create_directory(path_=get_model_dir())
+
+        for epoch in range(self._epochs):
             self._epoch_train(train_dataloader)
             self._epoch_eval(val_dataloader)
-            print(
-                "Epoch: {}/{}, Train Loss={}, Val Loss={}".format(
-                    epoch + 1,
-                    self.epochs,
-                    np.round(self.loss["train"][-1], 10),
-                    np.round(self.loss["val"][-1], 10),
-                    )
+            log(
+                info=f"Epoch: {epoch + 1}/{self._epochs}, " \
+                     f"Train Loss={np.round(self._loss['train'][-1], 10)}, " \
+                     f"Val Loss={np.round(self._loss['val'][-1], 10)}"
             )
 
             # reducing LR if no improvement
-            if self.scheduler is not None:
-                self.scheduler.step(self.loss["train"][-1])
+            if self._scheduler is not None:
+                self._scheduler.step(self._loss["train"][-1])
 
             # saving model
-            if (epoch + 1) % self.checkpoint_frequency == 0:
-                torch.save(
-                    self.model.state_dict(), "model_{}".format(str(epoch + 1).zfill(3))
-                )
+            if (epoch + 1) % self._CHECKPOINT_FREQUENCY == 0:
+                self._save_model(suffix=str(epoch + 1).zfill(3))
 
             # early stopping
-            if epoch < self.early_stopping_avg:
-                min_val_loss = np.round(np.mean(self.loss["val"]), self.early_stopping_precision)
+            if epoch < self._EARLY_STOPPING_AVG:
+                min_val_loss = np.round(np.mean(self._loss["val"]), self._EARLY_STOPPING_PRECISION)
                 no_decrease_epochs = 0
 
             else:
                 val_loss = np.round(
-                    np.mean(self.loss["val"][-self.early_stopping_avg:]),
-                    self.early_stopping_precision
+                    np.mean(self._loss["val"][-self._EARLY_STOPPING_AVG:]),
+                    self._EARLY_STOPPING_PRECISION
                 )
                 if val_loss >= min_val_loss:
                     no_decrease_epochs += 1
                 else:
                     min_val_loss = val_loss
                     no_decrease_epochs = 0
-                    #print('New min: ', min_val_loss)
 
-            if no_decrease_epochs > self.early_stopping_epochs:
-                print("Early Stopping")
+            if no_decrease_epochs > self._EARLY_STOPPING_EPOCHS:
+                log(info="Early Stopping")
                 break
 
-        torch.save(self.model.state_dict(), "model_final")
-        return self.model
+        self._save_model(suffix='final')
+        store_json(path_=get_loss_file(), obj=self.loss)
+
+        return self._model
 
     def _epoch_train(self, dataloader):
-        self.model.train()
+        self._model.train()
         running_loss = []
 
         for i, data in enumerate(dataloader, 0):
 
-            log_progress(idx=i, max_=len(dataloader), ckp=1)
+            log_progress(idx=i, max_=len(dataloader), ckp=20)
 
-            inputs = data['image'].to(self.device)
-            labels = data['heatmaps'].to(self.device)
+            inputs = data['image'].to(self._device)
+            labels = data['heatmaps'].to(self._device)
 
-            self.optimizer.zero_grad()
+            self._optimizer.zero_grad()
 
-            outputs = self.model(inputs)
-            loss = self.criterion(outputs, labels)
+            outputs = self._model(inputs)
+            loss = self._criterion(outputs, labels)
             loss.backward()
-            self.optimizer.step()
+            self._optimizer.step()
 
             running_loss.append(loss.item())
 
-            if i == self.batches_per_epoch:
+            if i == self._batches_per_epoch:
                 epoch_loss = np.mean(running_loss)
-                self.loss["train"].append(epoch_loss)
+                self._loss["train"].append(epoch_loss)
                 break
 
     def _epoch_eval(self, dataloader):
-        self.model.eval()
+        self._model.eval()
         running_loss = []
 
         with torch.no_grad():
             for i, data in enumerate(dataloader, 0):
 
-                inputs = data['image'].to(self.device)
-                labels = data['heatmaps'].to(self.device)
+                log_progress(idx=i, max_=len(dataloader), ckp=5)
 
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, labels)
+                inputs = data['image'].to(self._device)
+                labels = data['heatmaps'].to(self._device)
+
+                outputs = self._model(inputs)
+                loss = self._criterion(outputs, labels)
 
                 running_loss.append(loss.item())
 
-                if i == self.batches_per_epoch_val:
+                if i == self._batches_per_epoch_val:
                     epoch_loss = np.mean(running_loss)
-                    self.loss["val"].append(epoch_loss)
+                    self._loss["val"].append(epoch_loss)
                     break
+
+    def _save_model(self, suffix: str):
+
+        torch.save(
+            self._model.state_dict(),
+            f=get_model_file(suffix=suffix)
+        )
+
+    @property
+    def loss(self):
+        return self._loss
+
+    def plot_loss(self):
+
+        epochs = range(1, len(self.loss["train"]) + 1)
+
+        plt.plot(epochs, self.loss["train"], label="Train Loss")
+        plt.plot(epochs, self.loss["val"], label="Validation Loss")
+
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title("Train and Validation Loss")
+        plt.legend()
+
+        plt.show()
