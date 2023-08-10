@@ -8,7 +8,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from io_ import log_progress, log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file
+from io_ import log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file
 from settings import MODEL_CONFIG
 
 
@@ -90,6 +90,8 @@ class Trainer:
 
             # Save model if checkpoint was reached
             if (epoch + 1) % self._CHECKPOINT_FREQUENCY == 0:
+
+                epoch_str = str(epoch + 1).zfill(len(str(self._epochs-1)))
                 self._save_model(suffix=str(epoch + 1).zfill(3))
 
             # Early stopping

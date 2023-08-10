@@ -10,24 +10,24 @@ from torch import nn, Tensor
 class HandPoseEstimationConvBlock(nn.Module):
     """ Convolutional block used in a U-net like neural network for Hand Pose Estimation task """
 
-    def __init__(self, in_ch: int, out_ch: int):
+    def __init__(self, in_channel: int, out_channel: int):
         """
-
-        :param in_ch: number of input channels for the convolutional block
-        :param in_ch: number of output channels for the convolutional block
+        :param in_channel: number of input channels for the convolutional block
         """
 
         super().__init__()
 
-        self._in_ch = in_ch
-        self._out_ch = out_ch
+        self._in_channel: int = in_channel
+        self._out_channel: int = out_channel
 
         self._double_conv = nn.Sequential(
-            nn.BatchNorm2d(in_ch),
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(in_channel),
+            nn.Conv2d(in_channels=in_channel, out_channels=out_channel,
+                      kernel_size=3, padding=1, bias=False),
             nn.ReLU(inplace=True),
-            nn.BatchNorm2d(in_ch),
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channel),
+            nn.Conv2d(in_channels=out_channel, out_channels=out_channel,
+                      kernel_size=3, padding=1, bias=False),
             nn.ReLU(inplace=True),
         )
 
@@ -35,7 +35,7 @@ class HandPoseEstimationConvBlock(nn.Module):
         """
         :return: string representation for the object
         """
-        return f"ConvBlock[In-channels: {self._in_ch}; Out-channels: {self._out_ch}]"
+        return f"ConvBlock[In-channels: {self._in_channel}; Out-channels: {self._out_channel}]"
 
     def __repr__(self) -> str:
         """
@@ -59,27 +59,31 @@ class HandPoseEstimationUNet(nn.Module):
 
     _NEURONS: int = 16
 
-    def __init__(self, in_ch: int, out_ch: int):
+    def __init__(self, in_channel: int, out_channel: int):
         """
 
-        :param in_ch: number of input channels for the network
+        :param in_channel: number of input channels for the network
         :param in_ch: number of output channels for the network
         """
         super().__init__()
 
-        self._in_ch = in_ch
-        self._out_ch = in_ch
+        self._in_channel: int = in_channel
+        self._out_channel: int = out_channel
 
         # ENCODER PART
 
         self._conv_down1: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=in_ch, out_ch=self._NEURONS)
+            HandPoseEstimationConvBlock(in_channel=in_channel,
+                                        out_channel=self._NEURONS)
         self._conv_down2: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS, out_ch=self._NEURONS * 2)
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS,
+                                        out_channel=self._NEURONS * 2)
         self._conv_down3: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 2, out_ch=self._NEURONS * 4)
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS * 2,
+                                        out_channel=self._NEURONS * 4)
         self._conv_bottleneck: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 4, out_ch=self._NEURONS * 8)  # deepest point the network
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS * 4,
+                                        out_channel=self._NEURONS * 8)  # deepest point the network
 
         # Downsampling
         self._maxpool: nn.MaxPool2d = nn.MaxPool2d(2)
@@ -87,13 +91,17 @@ class HandPoseEstimationUNet(nn.Module):
         # DECODER PART
 
         self._conv_up1: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 8 + self._NEURONS * 4, out_ch=self._NEURONS * 4)
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS * 8 + self._NEURONS * 4,
+                                        out_channel=self._NEURONS * 4)
         self._conv_up2: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 4 + self._NEURONS * 2, out_ch=self._NEURONS * 2)
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS * 4 + self._NEURONS * 2,
+                                        out_channel=self._NEURONS * 2)
         self._conv_up3: HandPoseEstimationConvBlock = \
-            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 2 + self._NEURONS, out_ch=self._NEURONS)
+            HandPoseEstimationConvBlock(in_channel=self._NEURONS * 2 + self._NEURONS,
+                                        out_channel=self._NEURONS)
         self._conv_out: nn.Sequential = nn.Sequential(  # final output of the network
-            nn.Conv2d(in_channels=self._NEURONS, out_channels=out_ch, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels=self._NEURONS, out_channels=out_channel,
+                      kernel_size=3, padding=1, bias=False),
             nn.Sigmoid(),
         )
 
@@ -104,7 +112,7 @@ class HandPoseEstimationUNet(nn.Module):
         """
         :return: string representation for the object
         """
-        return f"U-Net[In-channels: {self._in_ch}; Out-channels: {self._out_ch}]"
+        return f"U-Net[In-channels: {self._in_channel}; Out-channels: {self._out_channel}]"
 
     def __repr__(self) -> str:
         """
