@@ -1,6 +1,9 @@
 """
 This file contains general purpose input/output function
 """
+
+from __future__ import annotations
+
 import json
 import os
 import zipfile
@@ -11,8 +14,28 @@ import numpy as np
 import requests
 from PIL import Image
 
-from settings import LOG, LOG_IO, IMG_EXT, FREIHAND_DIR, FILE_2D, IMAGES, FILE_MEAN_STD, MODEL, LOSS_FILE
+from settings import FREIHAND_INFO
 from utlis import pad_idx
+
+# LOGGING
+LOG: bool = True
+LOG_IO: bool = False
+
+# DIRECTORIES AND FILES
+DIR_NAMES: Dict[str, str] = {
+    "freihand": "FreiHAND",
+    "images": path.join("training", "rgb"),
+    "model": "model"
+}
+
+FILES: Dict[str, str] = {
+    "3d": "training_xyz.json",
+    "camera": "training_K.json",
+    "2d": "training_xy.json",
+    "file_mean_std": "mean_std.json",
+    "loss": "loss.json",
+    "model": "model"
+}
 
 """ LOG """
 
@@ -72,42 +95,42 @@ def get_dataset_dir() -> str:
     """
     :return: path to root directory
     """
-    return path.join(get_root_dir(), FREIHAND_DIR)
+    return path.join(get_root_dir(), DIR_NAMES["freihand"])
 
 
 def get_images_dir() -> str:
     """
     :return: path to image directory
     """
-    return path.join(get_dataset_dir(), IMAGES)
+    return path.join(get_dataset_dir(), DIR_NAMES["images"])
 
 
 def get_model_dir() -> str:
     """
     :return: path to model directory
     """
-    return path.join(get_dataset_dir(), MODEL)
+    return path.join(get_dataset_dir(), DIR_NAMES["model"])
 
 
 def get_2d_file() -> str:
     """
     :return: path to 2-dimension file
     """
-    return path.join(get_dataset_dir(), FILE_2D)
+    return path.join(get_dataset_dir(), FILES["2d"])
 
 
 def get_mean_std_file() -> str:
     """
     :return: path to mean and standard deviation file
     """
-    return path.join(get_dataset_dir(), FILE_MEAN_STD)
+    return path.join(get_dataset_dir(), FILES["file_mean_std"])
 
 
 def get_loss_file() -> str:
     """
     :return: path to loss file
     """
-    return path.join(get_model_dir(), LOSS_FILE)
+    return path.join(get_model_dir(), FILES["loss"])
 
 
 def get_model_file(suffix: str = "final") -> str:
@@ -115,7 +138,7 @@ def get_model_file(suffix: str = "final") -> str:
     :param: suffix for the name of file indicative of the model
     :return: path to mean and standard deviation file
     """
-    return path.join(get_model_dir(), f"{MODEL}_{suffix}")
+    return path.join(get_model_dir(), f"{FILES['model']}_{suffix}")
 
 
 def read_means_stds() -> Tuple[np.ndarray, np.ndarray]:
@@ -212,7 +235,7 @@ def read_image(idx: int) -> Image:
     :return: image
     """
 
-    file_ = f"{pad_idx(idx=idx)}.{IMG_EXT}"
+    file_ = f"{pad_idx(idx=idx)}.{FREIHAND_INFO['ext']}"
     dir_ = get_images_dir()
 
     img_path = path.join(dir_, file_)

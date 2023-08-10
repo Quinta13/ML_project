@@ -1,6 +1,7 @@
 """
-This file contains classes to prepare dataset for Machine Learning model
+This file contains classes to work with the Dataset
 """
+
 from os import path
 from typing import List, Dict
 from typing import Tuple, Any, Optional, Union, Iterable, Sequence
@@ -10,11 +11,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.utils.data.dataloader import _collate_fn_t, _worker_init_fn_t
 
-from io_ import download_zip, read_json, store_json, get_dataset_dir, get_2d_file, get_mean_std_file
+from io_ import download_zip, read_json, store_json, get_dataset_dir, get_2d_file, get_mean_std_file, FILES
 from io_ import log, log_progress, read_means_stds
 from model.hand import HandCollection
-from settings import FREIHAND_URL, FILE_3D, FILE_CAMERA, NEW_SIZE
-from settings import TRAIN_NAME, VALIDATION_NAME, TEST_NAME, PRC, DATA
+from settings import FREIHAND_INFO, DATA, PRC
 
 
 class FreiHANDDownloader:
@@ -66,7 +66,7 @@ class FreiHANDDownloader:
 
         log(info="Downloading dataset ")
         download_zip(
-            url=FREIHAND_URL,
+            url=FREIHAND_INFO["url"],
             dir_=self.dataset_dir
         )
 
@@ -123,8 +123,8 @@ class FreiHAND2DConverter:
 
         # Loading json
         dataset_dir = get_dataset_dir()
-        xyz_fp = path.join(dataset_dir, FILE_3D)
-        cameras_fp = path.join(dataset_dir, FILE_CAMERA)
+        xyz_fp = path.join(dataset_dir, FILES["3d"])
+        cameras_fp = path.join(dataset_dir, FILES["camera"])
 
         xyz = np.array(read_json(xyz_fp))
         cameras = np.array(read_json(cameras_fp))
@@ -268,7 +268,8 @@ class FreiHANDSplit:
             channel_sum_squared += np.sum(img_arr ** 2, axis=(0, 1))
 
         # Get the total number of pixels
-        total_pixels = NEW_SIZE * NEW_SIZE * self.train_len
+        new_size = DATA["new_size"]
+        total_pixels = new_size * new_size * self.train_len
 
         # Computing mean and standard deviation
         channel_mean = channel_sum / total_pixels
@@ -292,26 +293,28 @@ class FreiHANDDataset(Dataset):
     Class to load FreiHAND dataset
     """
 
-    def __init__(self, set_type=TRAIN_NAME):
+    def __init__(self, set_type: str):
         """
-
-        :param set_type: name of set (training, validation or test)
+        :param set_type: name of set (train, val or test)
         """
 
         self._set_type = set_type
         self._collection = HandCollection()
         self._means, self._stds = read_means_stds()
 
-        split = FreiHANDSplit(n=DATA, percentages=PRC)
+        split_names = list(PRC.keys())
+        percentages = list(PRC.values())
 
-        if set_type == TRAIN_NAME:
+        split = FreiHANDSplit(n=DATA["n_data"], percentages=percentages)
+
+        if set_type == split_names[0]:
             ab = split.train_idx
-        elif set_type == VALIDATION_NAME:
+        elif set_type == split_names[1]:
             ab = split.val_idx
-        elif set_type == TEST_NAME:
+        elif set_type == split_names[2]:
             ab = split.test_idx
         else:
-            raise Exception(f"Invalid set name {set_type};" \
+            raise Exception(f"Invalid set name {set_type};"\
                             " choose one between [{TRAIN_NAME}; {VALIDATION_NAME_NAME}; {TEST_NAME}]")
 
         a, b = ab
@@ -368,6 +371,10 @@ class FreiHANDDataset(Dataset):
 
 class FreiHANDDataLoader(DataLoader):
 
+    """
+    This class implements the DataLoader for FreiHand Dataset
+    """
+
     def __init__(self, dataset: FreiHANDDataset, batch_size: Optional[int] = 1, shuffle: Optional[bool] = None,
                  sampler: Union[Sampler, Iterable, None] = None,
                  batch_sampler: Union[Sampler[Sequence], Iterable[Sequence], None] = None, num_workers: int = 0,
@@ -375,6 +382,51 @@ class FreiHANDDataLoader(DataLoader):
                  timeout: float = 0, worker_init_fn: Optional[_worker_init_fn_t] = None, multiprocessing_context=None,
                  generator=None, *, prefetch_factor: int = 2, persistent_workers: bool = False,
                  pin_memory_device: str = ""):
+        """
+
+        :param dataset: dataset from which to load the data.
+        :param batch_size: how many samples per batch to load
+            (default: ``1``).
+        :param shuffle: set to ``True`` to have the data reshuffled
+            at every epoch (default: ``False``).
+        :param sampler: defines the strategy to draw
+            samples from the dataset. Can be any ``Iterable`` with ``__len__``
+            implemented. If specified, :attr:`shuffle` must not be specified.
+        :param batch_sampler: like :attr:`sampler`, but
+            returns a batch of indices at a time. Mutually exclusive with
+            :attr:`batch_size`, :attr:`shuffle`, :attr:`sampler`,
+            and :attr:`drop_last`.
+        :param num_workers: how many subprocesses to use for data
+            loading. ``0`` means that the data will be loaded in the main process.
+            (default: ``0``)
+        :param collate_fn: merges a list of samples to form a
+            mini-batch of Tensor(s).  Used when using batched loading from a
+            map-style dataset.
+        :param pin_memory: If ``True``, the data loader will copy Tensors
+            into device/CUDA pinned memory before returning them.  If your data elements
+            are a custom type, or your :attr:`collate_fn` returns a batch that is a custom type,
+            see the example below.
+        :param drop_last: set to ``True`` to drop the last incomplete batch,
+            if the dataset size is not divisible by the batch size. If ``False`` and
+            the size of dataset is not divisible by the batch size, then the last batch
+            will be smaller. (default: ``False``)
+        :param timeout: if positive, the timeout value for collecting a batch
+            from workers. Should always be non-negative. (default: ``0``)
+        :param worker_init_fn: If not ``None``, this will be called on each
+            worker subprocess with the worker id (an int in ``[0, num_workers - 1]``) as
+            input, after seeding and before data loading. (default: ``None``)
+        :param generator: If not ``None``, this RNG will be used
+            by RandomSampler to generate random indexes and multiprocessing to generate
+            `base_seed` for workers. (default: ``None``)
+        :param prefetch_factor: Number of batches loaded
+            in advance by each worker. ``2`` means there will be a total of
+            2 * num_workers batches prefetched across all workers. (default: ``2``)
+        :param persistent_workers: If ``True``, the data loader will not shutdown
+            the worker processes after a dataset has been consumed once. This allows to
+            maintain the workers `Dataset` instances alive. (default: ``False``)
+        :param pin_memory_device: the data loader will copy Tensors
+            into device pinned memory before returning them if pin_memory is set to true.
+        """
         super().__init__(dataset, batch_size, shuffle, sampler, batch_sampler, num_workers, collate_fn, pin_memory,
                          drop_last, timeout, worker_init_fn, multiprocessing_context, generator,
                          prefetch_factor=prefetch_factor, persistent_workers=persistent_workers,

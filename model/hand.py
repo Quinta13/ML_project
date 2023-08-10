@@ -1,15 +1,42 @@
 """
-This file contains some classes to handle Hand and Keypoints
+This file contains some classes to handle Hand image, transformations, keypoints and heatmaps
 """
-from typing import List, Tuple
+
+from __future__ import annotations
+
+from typing import List, Tuple, Dict, Union
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from io_ import read_json, read_image, get_2d_file
-from settings import ORIGINAL_SIZE, NEW_SIZE, FINGERS, COLORS, WIDTH, LINES, RAW, SIGMA_BLUR, RADIUS, \
-    POINT, NUM_KEYPOINTS, IMG_EXT
+from settings import DATA, FREIHAND_INFO
 from utlis import pad_idx
+
+# CONNECTIONS
+KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
+    "thumb": [(0, 1), (1, 2), (2, 3), (3, 4)],
+    "index": [(0, 5), (5, 6), (6, 7), (7, 8)],
+    "middle": [(0, 9), (9, 10), (10, 11), (11, 12)],
+    "ring": [(0, 13), (13, 14), (14, 15), (15, 16)],
+    "little": [(0, 17), (17, 18), (18, 19), (19, 20)],
+}
+
+# DRAW STYLE
+
+STYLE: Dict[str, int | float | str] = {
+    "point_color": "383838",
+    "point_radius": 1.5,
+    "line_width": 2
+}
+
+COLORS: Dict[str, str] = {
+    "thumb": "008000",
+    "index": "00FFFF",
+    "middle": "0000FF",
+    "ring": "FF00FF",
+    "little": "FF0000"
+}
 
 
 class Hand:
@@ -36,10 +63,13 @@ class Hand:
         self._idx: str = pad_idx(idx=idx)
 
         # Resize to NEW_SIZE
-        self._image: Image = image.resize((NEW_SIZE, NEW_SIZE))
+        new_size = DATA["new_size"]
+        original_size = FREIHAND_INFO["size"]
+
+        self._image: Image = image.resize((new_size, new_size))
         self._keypoints: List[Tuple[float, float]] = [
-            (float(kp_x * NEW_SIZE / ORIGINAL_SIZE),
-             float(kp_y * NEW_SIZE / ORIGINAL_SIZE))
+            (float(kp_x * new_size / original_size),
+             float(kp_y * new_size / original_size))
             for kp_x, kp_y in keypoints
         ]
 
@@ -62,7 +92,7 @@ class Hand:
         """
         :return: if image is raw
         """
-        return int(self.idx) < RAW
+        return int(self.idx) < FREIHAND_INFO["raw"]
 
     @property
     def is_augmented(self) -> bool:
@@ -76,7 +106,7 @@ class Hand:
         """
         :return: image dataset index
         """
-        return f"{self._idx}.{IMG_EXT}"
+        return f"{self._idx}.{FREIHAND_INFO['ext']}"
 
     @property
     def image(self) -> Image:
@@ -143,7 +173,7 @@ class Hand:
         new_img = self.image.copy()
         draw = ImageDraw.Draw(new_img)
 
-        color_point = tuple(int(POINT[i:i + 2], 16) for i in (0, 2, 4)) + (0,)  # from hex to rgb
+        color_point = tuple(int(STYLE["point_color"][i:i + 2], 16) for i in (0, 2, 4)) + (0,)  # from hex to rgb
 
         # Draw circles
         for keypoint in self.keypoints:
@@ -151,25 +181,26 @@ class Hand:
             x, y = keypoint
 
             # Calculate the bounding box of the circle
-            x0 = x - RADIUS
-            y0 = y - RADIUS
-            x1 = x + RADIUS
-            y1 = y + RADIUS
+            radius = STYLE["point_radius"]
+            x0 = x - radius
+            y0 = y - radius
+            x1 = x + radius
+            y1 = y + radius
 
             # Draw the circle with the specified color and alpha
             draw.ellipse([(x0, y0), (x1, y1)], fill=color_point)
 
         # Draw lines
-        for finger in FINGERS:
+        for finger_key, connection in KEYPOINTS_CONNECTIONS.items():
 
             # finger color
-            color = COLORS[finger]
+            color = COLORS[finger_key]
             color_rgb = tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))  # from hex to rgb
 
             # finger connections
-            for line in LINES[finger]:
+            for line in connection:
                 p1, p2 = line
-                draw.line([self.keypoints[p1], self.keypoints[p2]], fill=color_rgb, width=WIDTH)
+                draw.line([self.keypoints[p1], self.keypoints[p2]], fill=color_rgb, width=STYLE["line_width"])
 
         return new_img
 
@@ -182,13 +213,15 @@ class Hand:
         :return: keypoint heatmap array in scale [0, 1]
         """
 
-        heatmap = np.zeros((NEW_SIZE, NEW_SIZE), dtype=np.float32)
+        new_size = DATA["new_size"]
+
+        heatmap = np.zeros((new_size, new_size), dtype=np.float32)
 
         x0, y0 = self.keypoints[key]
-        x = np.arange(0, NEW_SIZE, 1, float)
-        y = np.arange(0, NEW_SIZE, 1, float)[:, np.newaxis]
+        x = np.arange(0, new_size, 1, float)
+        y = np.arange(0, new_size, 1, float)[:, np.newaxis]
 
-        heatmap += np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2.0 * SIGMA_BLUR ** 2))
+        heatmap += np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2.0 * DATA["sigma_blur"] ** 2))
 
         return heatmap
 
@@ -199,7 +232,7 @@ class Hand:
         :return: all heatmaps array in scale [0, 1]
         """
 
-        return np.array([self.get_heatmap(key=i) for i in range(NUM_KEYPOINTS)])
+        return np.array([self.get_heatmap(key=i) for i in range(FREIHAND_INFO["n_keypoints"])])
 
     @staticmethod
     def draw_heatmap(heatmap: np.ndarray) -> Image:
@@ -307,6 +340,6 @@ class HandCollection:
         """
 
         # augmented labels are the same as raw ones
-        actual_idx = idx % RAW
+        actual_idx = idx % FREIHAND_INFO["raw"]
 
         return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[actual_idx])

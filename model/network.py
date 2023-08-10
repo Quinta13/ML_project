@@ -1,72 +1,137 @@
+"""
+This file contains the implementation of the Artificial Neural Network
+Original models from https://github.com/OlgaChernytska/2D-Hand-Pose-Estimation-RGB
+"""
+
 import torch
-from torch import nn
-
-from settings import NEURONS
+from torch import nn, Tensor
 
 
-class ConvBlock(nn.Module):
+class HandPoseEstimationConvBlock(nn.Module):
+    """ Convolutional block used in a U-net like neural network for Hand Pose Estimation task """
 
-    def __init__(self, in_depth, out_depth):
-        super().__init__()
-        self.double_conv = nn.Sequential(
-            nn.BatchNorm2d(in_depth),
-            nn.Conv2d(in_depth, out_depth, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(out_depth),
-            nn.Conv2d(out_depth, out_depth, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-        )
+    def __init__(self, in_ch: int, out_ch: int):
+        """
 
-    def forward(self, x):
-        return self.double_conv(x)
+        :param in_ch: number of input channels for the convolutional block
+        :param in_ch: number of output channels for the convolutional block
+        """
 
-
-class ShallowUNet(nn.Module):
-    """
-    Implementation of UNet, slightly modified:
-    - less downsampling blocks
-    - less neurons in the layers
-    - Batch Normalization added
-
-    Link to paper on original UNet:
-    https://arxiv.org/abs/1505.04597
-    """
-
-    def __init__(self, in_channel, out_channel):
         super().__init__()
 
-        self.conv_down1 = ConvBlock(in_channel, NEURONS)
-        self.conv_down2 = ConvBlock(NEURONS, NEURONS * 2)
-        self.conv_down3 = ConvBlock(NEURONS * 2, NEURONS * 4)
-        self.conv_bottleneck = ConvBlock(NEURONS * 4, NEURONS * 8)
+        self._in_ch = in_ch
+        self._out_ch = out_ch
 
-        self.maxpool = nn.MaxPool2d(2)
-        self.upsamle = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
-
-        self.conv_up1 = ConvBlock(
-            NEURONS * 8 + NEURONS * 4, NEURONS * 4
+        self._double_conv = nn.Sequential(
+            nn.BatchNorm2d(in_ch),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(in_ch),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
+            nn.ReLU(inplace=True),
         )
-        self.conv_up2 = ConvBlock(
-            NEURONS * 4 + NEURONS * 2, NEURONS * 2
-        )
-        self.conv_up3 = ConvBlock(NEURONS * 2 + NEURONS, NEURONS)
 
-        self.conv_out = nn.Sequential(
-            nn.Conv2d(NEURONS, out_channel, kernel_size=3, padding=1, bias=False),
+    def __str__(self) -> str:
+        """
+        :return: string representation for the object
+        """
+        return f"ConvBlock[In-channels: {self._in_ch}; Out-channels: {self._out_ch}]"
+
+    def __repr__(self) -> str:
+        """
+        :return: string representation for the object
+        """
+        return str(self)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Implementation of forward pass for the network
+        :param x: input tensor
+        :return: tensor after passing through the convolutional block
+        """
+        return self._double_conv(x)
+
+
+class HandPoseEstimationUNet(nn.Module):
+    """
+    Implementation of U-Net for Hand Pose Estimation
+    """
+
+    _NEURONS: int = 16
+
+    def __init__(self, in_ch: int, out_ch: int):
+        """
+
+        :param in_ch: number of input channels for the network
+        :param in_ch: number of output channels for the network
+        """
+        super().__init__()
+
+        self._in_ch = in_ch
+        self._out_ch = in_ch
+
+        # ENCODER PART
+
+        self._conv_down1: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=in_ch, out_ch=self._NEURONS)
+        self._conv_down2: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS, out_ch=self._NEURONS * 2)
+        self._conv_down3: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 2, out_ch=self._NEURONS * 4)
+        self._conv_bottleneck: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 4, out_ch=self._NEURONS * 8)  # deepest point the network
+
+        # Downsampling
+        self._maxpool: nn.MaxPool2d = nn.MaxPool2d(2)
+
+        # DECODER PART
+
+        self._conv_up1: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 8 + self._NEURONS * 4, out_ch=self._NEURONS * 4)
+        self._conv_up2: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 4 + self._NEURONS * 2, out_ch=self._NEURONS * 2)
+        self._conv_up3: HandPoseEstimationConvBlock = \
+            HandPoseEstimationConvBlock(in_ch=self._NEURONS * 2 + self._NEURONS, out_ch=self._NEURONS)
+        self._conv_out: nn.Sequential = nn.Sequential(  # final output of the network
+            nn.Conv2d(in_channels=self._NEURONS, out_channels=out_ch, kernel_size=3, padding=1, bias=False),
             nn.Sigmoid(),
         )
 
-    def forward(self, x):
-        conv_d1 = self.conv_down1(x)
-        conv_d2 = self.conv_down2(self.maxpool(conv_d1))
-        conv_d3 = self.conv_down3(self.maxpool(conv_d2))
-        conv_b = self.conv_bottleneck(self.maxpool(conv_d3))
+        # Upsampling
+        self._upsamle: nn.Upsample = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
 
-        conv_u1 = self.conv_up1(torch.cat([self.upsamle(conv_b), conv_d3], dim=1))
-        conv_u2 = self.conv_up2(torch.cat([self.upsamle(conv_u1), conv_d2], dim=1))
-        conv_u3 = self.conv_up3(torch.cat([self.upsamle(conv_u2), conv_d1], dim=1))
+    def __str__(self) -> str:
+        """
+        :return: string representation for the object
+        """
+        return f"U-Net[In-channels: {self._in_ch}; Out-channels: {self._out_ch}]"
 
-        out = self.conv_out(conv_u3)
+    def __repr__(self) -> str:
+        """
+        :return: string representation for the object
+        """
+        return str(self)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Definition of the forward pass of data through the U-Net architecture
+        :param x: input tensor
+        :return: output tensor passed through the U-Net
+        """
+
+        # ENCORED
+        conv_d1 = self._conv_down1(x)
+        conv_d2 = self._conv_down2(self._maxpool(conv_d1))
+        conv_d3 = self._conv_down3(self._maxpool(conv_d2))
+        conv_b = self._conv_bottleneck(self._maxpool(conv_d3))
+
+        # DECODER
+        conv_u1 = self._conv_up1(torch.cat([self._upsamle(conv_b), conv_d3], dim=1))
+        conv_u2 = self._conv_up2(torch.cat([self._upsamle(conv_u1), conv_d2], dim=1))
+        conv_u3 = self._conv_up3(torch.cat([self._upsamle(conv_u2), conv_d1], dim=1))
+
+        out = self._conv_out(conv_u3)
+
         return out
 
 
@@ -77,26 +142,53 @@ class IoULoss(nn.Module):
     IoU loss is modified to use for heatmaps.
     """
 
+    _EPSILON = 1e-6  # prevent division by zero
+
     def __init__(self):
         super(IoULoss, self).__init__()
-        self.EPSILON = 1e-6
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        :return: string representation for the object
+        """
         return "IoULoss"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        :return: string representation for the object
+        """
         return str(self)
 
-    def _op_sum(self, x):
+    @staticmethod
+    def _op_sum(x: Tensor):
+        """
+        It calculates the sum of tensor values along the last two dimensions
+        :param x: input tensor
+        :return: sum over the last two dimensions
+        """
         return x.sum(-1).sum(-1)
 
-    def forward(self, y_pred, y_true):
-        inter = self._op_sum(y_true * y_pred)
+    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        """
+        Defines loss calculation
+        :param y_pred: predicted labels
+        :param y_true: ground truth labels
+        :return: loss
+        """
+
+        # Computing Intersection
+        inter = self._op_sum(x=y_true * y_pred)
+
+        # Computing Union
+        # A \cup B = A + B - (A \cap B)
         union = (
-                self._op_sum(y_true ** 2)
-                + self._op_sum(y_pred ** 2)
-                - self._op_sum(y_true * y_pred)
+                self._op_sum(x=y_true ** 2)  # A
+                + self._op_sum(x=y_pred ** 2)  # B
+                - inter  # (A \cap B)
         )
-        iou = (inter + self.EPSILON) / (union + self.EPSILON)
-        iou = torch.mean(iou)
+
+        # Computing Intersection over Union
+        iou: Tensor = (inter + self._EPSILON) / (union + self._EPSILON)
+        iou: Tensor = torch.mean(input=iou)
+
         return 1 - iou

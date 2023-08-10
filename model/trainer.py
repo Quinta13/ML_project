@@ -1,29 +1,37 @@
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+from torch import nn
+from torch.optim import SGD
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from io_ import log_progress, log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file
-from settings import DEVICE
+from settings import MODEL_CONFIG
 
 
 class Trainer:
+
     _CHECKPOINT_FREQUENCY = 100
     _EARLY_STOPPING_EPOCHS = 10
     _EARLY_STOPPING_AVG = 10
     _EARLY_STOPPING_PRECISION = 5
 
-    def __init__(self, model, criterion, optimizer, epochs, batches_per_epoch, batches_per_epoch_val, scheduler=None):
+    def __init__(self, model: nn.Module, criterion: nn.Module,
+                 epochs: int, batches_per_epoch: int, batches_per_epoch_val: int):
 
         self._model = model
         self._criterion = criterion
-        self._optimizer = optimizer
-        self._scheduler = scheduler
 
-        self._device = DEVICE
+        self._device = MODEL_CONFIG["device"]
 
         self._epochs = epochs
         self._batches_per_epoch = batches_per_epoch
         self._batches_per_epoch_val = batches_per_epoch_val
+
+        self._optimizer: SGD = SGD(params=model.parameters(), lr=MODEL_CONFIG["learning_rate"])
+        self._scheduler: ReduceLROnPlateau = ReduceLROnPlateau(
+            optimizer=self._optimizer, factor=0.5, patience=20, verbose=True, threshold=0.00001
+        )
 
         self._loss = {"train": [], "val": []}
 
