@@ -63,7 +63,7 @@ class HandPoseEstimationUNet(nn.Module):
         """
 
         :param in_channel: number of input channels for the network
-        :param in_ch: number of output channels for the network
+        :param out_channel: number of output channels for the network
         """
         super().__init__()
 
@@ -141,7 +141,6 @@ class HandPoseEstimationUNet(nn.Module):
         out = self._conv_out(conv_u3)
 
         return out
-
 
 class IoULoss(nn.Module):
     """

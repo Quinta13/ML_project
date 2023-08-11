@@ -315,7 +315,7 @@ class FreiHANDDataset(Dataset):
             ab = split.test_idx
         else:
             raise Exception(f"Invalid set name {set_type};"\
-                            " choose one between [{TRAIN_NAME}; {VALIDATION_NAME_NAME}; {TEST_NAME}]")
+                            " choose one between {train; validation; set}")
 
         a, b = ab
         self._indexes: List[int] = list(range(a, b))

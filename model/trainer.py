@@ -8,7 +8,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from io_ import log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file
+from io_ import log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file, log_io
 from settings import MODEL_CONFIG
 
 
@@ -91,8 +91,9 @@ class Trainer:
             # Save model if checkpoint was reached
             if (epoch + 1) % self._CHECKPOINT_FREQUENCY == 0:
 
+                log(info=f"Saving checkpoint model: epoch {epoch}")
                 epoch_str = str(epoch + 1).zfill(len(str(self._epochs-1)))
-                self._save_model(suffix=str(epoch + 1).zfill(3))
+                self._save_model(suffix=epoch_str)
 
             # Early stopping
             if epoch < self._EARLY_STOPPING_AVG:
@@ -114,6 +115,8 @@ class Trainer:
                 break
 
         # Save model and loss
+
+        log(info="Saving final model")
         self._save_model(suffix='final')
         store_json(path_=get_loss_file(), obj=self.loss)
 
@@ -192,10 +195,11 @@ class Trainer:
         It saves the actual model with given suffix
         :param suffix: suffix to model file
         """
-
+        fp = get_model_file(suffix=suffix)
+        log_io(info=f"Saving {fp}")
         torch.save(
             obj=self._model.state_dict(),
-            f=get_model_file(suffix=suffix)
+            f=fp
         )
 
     @property

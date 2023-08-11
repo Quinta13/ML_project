@@ -36,8 +36,8 @@ PRC: Dict[str, float] = {
 
 MODEL_CONFIG: Dict[str, Any] = {
     "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-    "in_channel": 3,
-    "out_channel": 21,
+    "in_channels": 3,
+    "out_channels": 21,
     "learning_rate": 0.1,
     "epochs": 1000,
     "batch_size": 48,
