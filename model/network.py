@@ -142,6 +142,7 @@ class HandPoseEstimationUNet(nn.Module):
 
         return out
 
+
 class IoULoss(nn.Module):
     """
     Intersection over Union Loss.

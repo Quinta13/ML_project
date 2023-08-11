@@ -262,7 +262,7 @@ class FreiHANDSplit:
         for train_idx in range(a, b):
             log_progress(idx=train_idx, max_=self.train_len, ckp=500)
 
-            img_arr = collection.get_hand(idx=train_idx).image_arr_mm  # we apply mix-max scaling
+            img_arr = collection[train_idx].image_arr_mm  # we apply mix-max scaling
 
             channel_sum += np.sum(img_arr, axis=(0, 1))
             channel_sum_squared += np.sum(img_arr ** 2, axis=(0, 1))
@@ -300,7 +300,6 @@ class FreiHANDDataset(Dataset):
 
         self._set_type = set_type
         self._collection = HandCollection()
-        self._means, self._stds = read_means_stds()
 
         split_names = list(PRC.keys())
         percentages = list(PRC.values())
@@ -347,9 +346,9 @@ class FreiHANDDataset(Dataset):
 
         actual_idx = self._indexes[idx]
 
-        hand = self._collection.get_hand(idx=actual_idx)
+        hand = self._collection[actual_idx]
 
-        X = hand.image_arr_z(means=self._means, stds=self._stds)
+        X = hand.image_arr_z()
         X = np.transpose(X, (2, 0, 1))  # move channels at first level
         X = torch.from_numpy(X)
 

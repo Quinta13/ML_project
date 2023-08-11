@@ -8,8 +8,9 @@ from typing import List, Tuple, Dict, Union
 
 import numpy as np
 from PIL import Image, ImageDraw
+from matplotlib import pyplot as plt
 
-from io_ import read_json, read_image, get_2d_file
+from io_ import read_json, read_image, get_2d_file, read_means_stds
 from settings import DATA, FREIHAND_INFO
 from utlis import pad_idx
 
@@ -129,12 +130,12 @@ class Hand:
         """
         return self.image_arr / 255
 
-    def image_arr_z(self, means: np.ndarray, stds: np.ndarray) -> np.ndarray:
+    def image_arr_z(self) -> np.ndarray:
         """
-        :param means: mean for every channel
-        :param stds: standard deviation for every channel
         :return: Z-transformation to image
         """
+
+        means, stds = read_means_stds()
 
         img = self.image_arr_mm
 
@@ -234,38 +235,89 @@ class Hand:
 
         return np.array([self.get_heatmap(key=i) for i in range(FREIHAND_INFO["n_keypoints"])])
 
+    @property
+    def heatmaps_all(self) -> np.ndarray:
+        """
+        Returns heatmaps in a single array
+        :return: heatmaps array
+        """
+
+        return np.sum(self.heatmaps, axis=0)
+
+    # PLOT
+
     @staticmethod
-    def draw_heatmap(heatmap: np.ndarray) -> Image:
+    def _plot(img_array: np.ndarray):
         """
-        Draw heatmap given array of pixels in scale [0, 1]
-        :param heatmap: heatmap array
-        :return: heatmap image
-        """
-
-        scaled_image_array = (heatmap * 255).astype(np.uint8)
-
-        # Convert the scaled array to a Pillow image with 'L' mode (grayscale)
-        return Image.fromarray(scaled_image_array, mode='L')
-
-    def get_heatmap_draw(self, key: int) -> Image:
-        """
-        Draws the heatmap for given keypoint
-        :param key: key index
-        :return: keypoint heatmap image
+        Draw image
+        :param img_array: heatmap array
         """
 
-        return self.draw_heatmap(
-            heatmap=self.get_heatmap(key=key)
-        )
+        if len(img_array.shape) == 2:  # grayscale
+            plt.imshow(img_array, cmap='gray', interpolation='nearest')
+        else:  # rgb
+            plt.imshow(img_array)
+        plt.axis('off')
 
-    def plot(self, means: np.ndarray, stds: np.ndarray):
+    def plot_image(self):
+        """
+        Plots original image
+        """
+        self._plot(img_array=np.array(self.image))
+
+    def plot_image_normalized(self):
+        """
+        Plots original image
+        """
+        self._plot(img_array=self.image_arr_z())
+
+    def plot_skeleton(self):
+        """
+        Plots skeleton
+        """
+        self._plot(img_array=np.array(self.skeleton))
+
+    def plot_heatmap(self, key: int):
+        """
+        Plots the heatmap for given keypoint
+        :param key: keypoint index
+        """
+
+        self._plot(img_array=self.get_heatmap(key=key))
+
+    def plot_heatmaps(self):
+        """
+        Plots all the heatmaps in a single image
+        """
+
+        self._plot(img_array=self.heatmaps_all)
+
+    def plot_network_input(self):
+        """
+        Plots input for the network
+        """
+
+        means, stds = read_means_stds()
+
+        # Subplots
+        fig, axes = plt.subplots(1, 2, figsize=(10, 10))
+
+        # Plot original image
+        axes[0].imshow(self.image_arr_z())
+        axes[0].set_title('Feature vector')
+        axes[0].axis('off')
+
+        # Plot original image
+        axes[1].imshow(self.heatmaps_all, cmap='gray')
+        axes[1].set_title('Heatmaps')
+        axes[1].axis('off')
+
+    def plot_preparation(self):
         """
         Draws
         :param means: mean for every channel
         :param stds: standard deviation for every channel
         """
-
-        from matplotlib import pyplot as plt
 
         # Subplots
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
@@ -281,7 +333,7 @@ class Hand:
         axes[0][1].axis('off')
 
         # Plot Z-transformation
-        axes[1][0].imshow(self.image_arr_z(means=means, stds=stds))
+        axes[1][0].imshow(self.image_arr_z())
         axes[1][0].set_title('Feature vector')
         axes[1][0].axis('off')
 
@@ -290,18 +342,6 @@ class Hand:
         axes[1][1].imshow(heatmap, cmap='gray')
         axes[1][1].set_title('Labels - Heatmaps')
         axes[1][1].axis('off')
-
-    def get_heatmaps_draw(self) -> Image:
-        """
-        Draws all the heatmaps
-        :return: keypoint heatmaps image
-        """
-
-        heatmap = np.sum(self.heatmaps, axis=0)
-
-        return self.draw_heatmap(
-            heatmap=heatmap
-        )
 
 
 class HandCollection:
@@ -332,7 +372,7 @@ class HandCollection:
         """
         return str(self)
 
-    def get_hand(self, idx: int) -> Hand:
+    def __getitem__(self, idx: int) -> Hand:
         """
         Return hand with given index
         :param idx: index
@@ -340,6 +380,6 @@ class HandCollection:
         """
 
         # augmented labels are the same as raw ones
-        actual_idx = idx % FREIHAND_INFO["raw"]
+        raw_idx = idx % FREIHAND_INFO["raw"]
 
-        return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[actual_idx])
+        return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[raw_idx])
