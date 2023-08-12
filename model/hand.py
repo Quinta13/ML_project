@@ -28,7 +28,7 @@ KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
 STYLE: Dict[str, int | float | str] = {
     "point_color": "383838",
     "point_radius": 1.5,
-    "line_width": 2
+    "line_width": 1
 }
 
 COLORS: Dict[str, str] = {
@@ -51,7 +51,7 @@ class Hand:
 
     # DUNDERS
 
-    def __init__(self, idx: int, image: Image, keypoints: List[List[float]]):
+    def __init__(self, idx: int, image: Image, keypoints: List):
         """
         It read the image and get the keypoints,
             it rescale them to NEW_SIZE from settings
@@ -93,7 +93,7 @@ class Hand:
         """
         :return: if image is raw
         """
-        return int(self.idx) < FREIHAND_INFO["raw"]
+        return int(self.idx[:-4]) < FREIHAND_INFO["raw"]
 
     @property
     def is_augmented(self) -> bool:
@@ -130,6 +130,7 @@ class Hand:
         """
         return self.image_arr / 255
 
+    @property
     def image_arr_z(self) -> np.ndarray:
         """
         :return: Z-transformation to image
@@ -165,10 +166,11 @@ class Hand:
         """
         return self._keypoints
 
-    @property
-    def skeleton(self) -> Image:
+    def _draw_skeleton(self, keypoints: List[Tuple[float, float]]) -> Image:
         """
-        :return: skeleton image
+        Draws given keypoints to the skeleton
+        :param keypoints: list of keypoints
+        :return: image with skeleton
         """
 
         new_img = self.image.copy()
@@ -177,7 +179,7 @@ class Hand:
         color_point = tuple(int(STYLE["point_color"][i:i + 2], 16) for i in (0, 2, 4)) + (0,)  # from hex to rgb
 
         # Draw circles
-        for keypoint in self.keypoints:
+        for keypoint in keypoints:
 
             x, y = keypoint
 
@@ -201,9 +203,17 @@ class Hand:
             # finger connections
             for line in connection:
                 p1, p2 = line
-                draw.line([self.keypoints[p1], self.keypoints[p2]], fill=color_rgb, width=STYLE["line_width"])
+                draw.line([keypoints[p1], keypoints[p2]], fill=color_rgb, width=STYLE["line_width"])
 
         return new_img
+
+    @property
+    def skeleton(self) -> Image:
+        """
+        :return: skeleton image
+        """
+
+        return self._draw_skeleton(keypoints=self.keypoints)
 
     # HEATMAPS
 
@@ -236,7 +246,7 @@ class Hand:
         return np.array([self.get_heatmap(key=i) for i in range(FREIHAND_INFO["n_keypoints"])])
 
     @property
-    def heatmaps_all(self) -> np.ndarray:
+    def _heatmaps_all(self) -> np.ndarray:
         """
         Returns heatmaps in a single array
         :return: heatmaps array
@@ -269,7 +279,7 @@ class Hand:
         """
         Plots original image
         """
-        self._plot(img_array=self.image_arr_z())
+        self._plot(img_array=self.image_arr_z)
 
     def plot_skeleton(self):
         """
@@ -290,7 +300,7 @@ class Hand:
         Plots all the heatmaps in a single image
         """
 
-        self._plot(img_array=self.heatmaps_all)
+        self._plot(img_array=self._heatmaps_all)
 
     def plot_network_input(self):
         """
@@ -303,12 +313,12 @@ class Hand:
         fig, axes = plt.subplots(1, 2, figsize=(10, 10))
 
         # Plot original image
-        axes[0].imshow(self.image_arr_z())
+        axes[0].imshow(self.image_arr_z)
         axes[0].set_title('Feature vector')
         axes[0].axis('off')
 
         # Plot original image
-        axes[1].imshow(self.heatmaps_all, cmap='gray')
+        axes[1].imshow(self._heatmaps_all, cmap='gray')
         axes[1].set_title('Heatmaps')
         axes[1].axis('off')
 
@@ -333,7 +343,7 @@ class Hand:
         axes[0][1].axis('off')
 
         # Plot Z-transformation
-        axes[1][0].imshow(self.image_arr_z())
+        axes[1][0].imshow(self.image_arr_z)
         axes[1][0].set_title('Feature vector')
         axes[1][0].axis('off')
 
@@ -383,3 +393,4 @@ class HandCollection:
         raw_idx = idx % FREIHAND_INFO["raw"]
 
         return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[raw_idx])
+

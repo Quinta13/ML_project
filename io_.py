@@ -12,9 +12,12 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import requests
+import torch
 from PIL import Image
+from torch import nn
 
-from settings import FREIHAND_INFO
+from model.network import HandPoseEstimationUNet
+from settings import FREIHAND_INFO, MODEL_CONFIG
 from utlis import pad_idx
 
 # LOGGING
@@ -25,6 +28,7 @@ LOG_IO: bool = False
 DIR_NAMES: Dict[str, str] = {
     "freihand": "FreiHAND",
     "images": path.join("training", "rgb"),
+    "external": path.join("external"),
     "model": "model"
 }
 
@@ -103,6 +107,13 @@ def get_images_dir() -> str:
     :return: path to image directory
     """
     return path.join(get_dataset_dir(), DIR_NAMES["images"])
+
+
+def get_external_images() -> str:
+    """
+    :return: path to external image directory
+    """
+    return path.join(get_dataset_dir(), DIR_NAMES["external"])
 
 
 def get_model_dir() -> str:
@@ -213,6 +224,26 @@ def store_json(path_: str, obj: Dict | List):
         json_file.write(json_string)
 
 
+def load_model(path_: str) -> nn.Module:
+    # define the model
+    model = HandPoseEstimationUNet(
+        in_channel=MODEL_CONFIG["in_channels"],
+        out_channel=MODEL_CONFIG["out_channels"]
+    )
+
+    # load the model from memory
+    model.load_state_dict(
+        state_dict=torch.load(
+            f=path_,
+            map_location=MODEL_CONFIG["device"]
+        )
+    )
+
+    model.eval()
+
+    return model
+
+
 """ IMAGE """
 
 
@@ -239,5 +270,17 @@ def read_image(idx: int) -> Image:
     dir_ = get_images_dir()
 
     img_path = path.join(dir_, file_)
+
+    return _read_image(path_=img_path)
+
+
+def read_external_image(file_name: str) -> Image:
+    """
+    Read an image from the directory given its index
+    :param file_name: name of image in the directory
+    :return: image
+    """
+
+    img_path = path.join(get_external_images(), file_name)
 
     return _read_image(path_=img_path)

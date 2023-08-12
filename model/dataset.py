@@ -348,7 +348,7 @@ class FreiHANDDataset(Dataset):
 
         hand = self._collection[actual_idx]
 
-        X = hand.image_arr_z()
+        X = hand.image_arr_z
         X = np.transpose(X, (2, 0, 1))  # move channels at first level
         X = torch.from_numpy(X)
 

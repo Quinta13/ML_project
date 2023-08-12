@@ -3,6 +3,18 @@ This file provides some utilities...
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
+
+def from_image_to_heatmap(hand, model):
+    img = hand.image_arr_z
+    img_transposed = np.transpose(img, axes=(2, 0, 1))
+    img_tensor = torch.from_numpy(img_transposed).unsqueeze(0)
+
+    pred_heatmaps = model(img_tensor)[0].detach().numpy()
+
+    return pred_heatmaps
 
 
 def pad_idx(idx: int) -> str:
@@ -38,4 +50,3 @@ def plot_multiple_images(images):
 
     # Display the images in a row
     plt.show()
-
