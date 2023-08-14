@@ -1,6 +1,18 @@
 """
-This file contains classes to work with the Dataset
+FreiHAND Dataset Handling
+
+This file contains classes and functions for working with the FreiHAND dataset
+ (downloading, conversion, splitting, loading, ...) tailored for hand pose estimation tasks.
+
+Contents:
+- FreiHANDDownloader: Provides methods for downloading and extracting the FreiHAND dataset.
+- FreiHAND2DConverter: Converts 3D hand pose points to 2D points using camera information.
+- FreiHANDSplit: Computes indexes for dataset splitting and calculates training set statistics.
+- FreiHANDDataset: Custom PyTorch dataset class for loading FreiHAND data samples.
+- FreiHANDDataLoader: Specialized DataLoader for efficient batch loading of FreiHANDDataset.
+
 """
+
 
 from os import path
 from typing import List, Dict
@@ -10,260 +22,340 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.utils.data.dataloader import _collate_fn_t, _worker_init_fn_t
+from tqdm import tqdm
 
 from io_ import download_zip, read_json, store_json, get_dataset_dir, get_2d_file, get_mean_std_file, FILES
-from io_ import log, log_progress, read_means_stds
+from io_ import log
 from model.hand import HandCollection
 from settings import FREIHAND_INFO, DATA, PRC
 
 
 class FreiHANDDownloader:
     """
-    This class provides an interface to download FreiHAND dataset
-        and extract it to specific directory
+    This class provides an interface to download the FreiHAND dataset
+     from a specified URL and extract it to a designated directory.
+
+    Attributes:
+     - dataset_dir str: path to dataset directory.
     """
 
-    # DUNDERS
+    # CONSTRUCTOR
+
+    def __init__(self):
+        """
+        Initialize the FreiHANDDownloader instance.
+
+        The `dataset_dir` attribute is set to the path of the directory
+         where the dataset will be stored.
+        """
+
+        self._dataset_dir: str = get_dataset_dir()
+
+    # REPRESENTATION
 
     def __str__(self) -> str:
         """
-        :return: object as a string
+        Return a string representation of the FreiHANDDownloader object.
+        :returns: string representation of the object.
         """
-        return f"FreiHANDDownloader [{self.dataset_dir}]"
+
+        return f"FreiHANDDownloader [Dir: {self._dataset_dir}; Downloaded: {self.is_downloaded}]"
 
     def __repr__(self) -> str:
         """
-        :return: object as a string
+        Return a string representation of the FreiHANDDownloader object.
+        :returns: string representation of the object.
         """
+
         return str(self)
 
-    # UTILS
+    # DOWNLOAD
 
     @property
     def is_downloaded(self) -> bool:
         """
-        :return: if the dataset was downloaded yet
+        Check if the FreiHAND dataset is already downloaded.
+        :return: True if the dataset is downloaded, False otherwise.
         """
-        return path.exists(self.dataset_dir)
 
-    @property
-    def dataset_dir(self) -> str:
-        """
-        :return: path to dataset directory
-        """
-        return get_dataset_dir()
-
-    # DOWNLOAD
+        return path.exists(self._dataset_dir)
 
     def download(self):
         """
-        It downloads the dataset if not downloaded yet
+        Download and extract the FreiHAND dataset if not already downloaded.
         """
 
+        # Check if already downloaded
         if self.is_downloaded:
-            log(info=f"Dataset is already downloaded at {self.dataset_dir}")
+            log(info=f"Dataset is already downloaded at {self._dataset_dir}")
             return
 
+        # Download
         log(info="Downloading dataset ")
         download_zip(
             url=FREIHAND_INFO["url"],
-            dir_=self.dataset_dir
+            dir_=self._dataset_dir
         )
 
 
 class FreiHAND2DConverter:
     """
-    This class provides an interface to convert 3-dimension points to 2-dimension ones
-        using camera information; the new points are stored locally
+    This class provides an interface to convert 3D hand keypoints to 2D keypoints using camera information.
+    The converted 2D keypoints are stored locally in a JSON file.
+
+    Attributes:
+     - file_2d: path to the 2D keypoints JSON file.
     """
 
-    # DUNDERS
+    # INITIALIZATION
+
+    def __init__(self):
+        """
+        Initialize the FreiHAND2DConverter instance.
+
+        The `file_2d` attribute is set to the path of the JSON file where
+         the converted 2D keypoints will be stored.
+        """
+
+        self._file_2d: str = get_2d_file()
+
+    # REPRESENTATION
 
     def __str__(self) -> str:
         """
-        :return: object as a string
+        Return a string representation of the FreiHAND2DConverter object.
+        :returns: string representation of the object.
         """
-        return f"FreiHAND2DConverter [{self.file_2d}]"
+
+        return f"FreiHAND2DConverter [File: {self._file_2d}; Converted: {self.is_converted}]"
 
     def __repr__(self) -> str:
         """
-        :return: object as a string
+        Return a string representation of the FreiHAND2DConverter object.
+        :returns: string representation of the object.
         """
+
         return str(self)
 
-    # UTILS
-
-    @property
-    def file_2d(self) -> str:
-        """
-        :return: path to 2-dimension points file
-        """
-        return get_2d_file()
+    # CONVERSION
 
     @property
     def is_converted(self) -> bool:
         """
-        :return: if the dataset was downloaded yet
+        Check if the 3D-to-2D conversion is already performed and stored.
+
+        :return: True if the conversion is performed and stored, False otherwise.
         """
-        return path.exists(self.file_2d)
+
+        return path.exists(self._file_2d)
 
     # CONVERT
 
     def convert_2d(self):
         """
-        Uses 3d points and camera to convert to 2d points
-            store the information in a .json file
+        Convert 3D hand keypoints to 2D keypoints using camera information and store them in a JSON file.
         """
 
+        # Check if already converted
         if self.is_converted:
-            log(info="2-dimension points converted yet")
+            log(info="3D-to-2D conversion is already performed")
             return
+
+        # Performing conversion
 
         log(info="Converting points to 2-dimension")
 
-        # Loading json
+        # Load 3D keypoints and camera information
         dataset_dir = get_dataset_dir()
-        xyz_fp = path.join(dataset_dir, FILES["3d"])
-        cameras_fp = path.join(dataset_dir, FILES["camera"])
+        xyz_fp = path.join(dataset_dir, FREIHAND_INFO["3d"])
+        cameras_fp = path.join(dataset_dir, FREIHAND_INFO["camera"])
 
         xyz = np.array(read_json(xyz_fp))
         cameras = np.array(read_json(cameras_fp))
 
-        # Computing orientation
+        # Perform 3D-to-2D conversion using camera information
         uv = np.array([np.matmul(camera, xyz_.T).T for xyz_, camera in zip(xyz, cameras)])
-
-        # Computing 2 dimension points
         xy = [list(uv_[:, :2] / uv_[:, -1:]) for uv_ in uv]
 
         # Cast to list a float
         xy = [[[float(x), float(y)] for x, y in inner_list] for inner_list in xy]
 
-        # Store information
+        # Store the converted 2D keypoints
         store_json(path_=get_2d_file(), obj=xy)
 
 
-class FreiHANDSplit:
+class FreiHANDSplitter:
     """
-    This class computes indexes for data split
-        and it provides the mean and standard deviation of training set
+    This class computes indexes for data splitting and provides
+     the mean and standard deviation of the training set for normalization.
+
+    Attributes:
+     - train_bounds: index boundaries for the training set.
+     - val_bounds: index boundaries for the validation set.
+     - test_bounds: index boundaries for the test set.
     """
+
+    # INITIALIZATION
 
     def __init__(self, n: int, percentages: List[float]):
         """
-        It uses as dataset the first n images
-        :param n: how many data in the dataset
-        :param percentages: percentages of train, validation and test for te split
+        Initialize the FreiHANDSplit instance.
+
+        :param n: total number of data samples.
+        :param percentages: percentages of train, validation, and test data.
+
+        :raises: Exception if the sum of percentages is not approximately equal to 1
+                  or if the number of percentages is not 3.
         """
 
-        # Sanity checks
+        # heck validity of input percentages
         if len(percentages) != 3:
-            raise Exception(f"Got {len(percentages)} percentages for split, but they must be 3 ")
+
+            raise Exception(f"Invalid number of percentages."
+                            f"Expected 3 percentages for train, validation, and test, got {len(percentages)}")
 
         if abs(sum(percentages) - 1) > 1e-9:  # floating point precision
-            raise Exception(f"Invalid distribution [{percentages}] ")
+            raise Exception(f"Invalid distribution percentages: {percentages}. The sum should be approximately 1.")
 
+        # Computing splut lengths
         train_prc, val_prc, test_prc = percentages
-
-        # Computing lengths
         train_len: int = int(n * train_prc)
         val_len: int = int(n * val_prc)
-        test_len: int = n - (train_len + val_len)  # ensures a round split
+        test_len: int = n - (train_len + val_len)  # Ensures a round split
 
-        # Getting indexes
-        self._train_idx: Tuple[int, int] = (0, train_len)
-        self._val_idx: Tuple[int, int] = (train_len, train_len + val_len)
-        self._test_idx: Tuple[int, int] = (n - test_len, n)
+        # Set index boundaries for different sets
+        self._train_bounds: Tuple[int, int] = (0, train_len)
+        self._val_bounds: Tuple[int, int] = (train_len, train_len + val_len)
+        self._test_bounds: Tuple[int, int] = (n - test_len, n)
+
+    # REPRESENTATION
 
     def __len__(self) -> int:
         """
-        :return: total length of splits
+        Get the total number of samples across all sets.
+        :return: total number of samples.
         """
+
         return self.train_len + self.val_len + self.test_len
 
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDSplitter object.
+        :returns: string representation of the object.
         """
-        return f"FreiHANDSplit[Train: {self.train_len}; Validation: {self.val_len}; Test: {self.test_len}]"
+
+        return f"FreiHANDSplitter[Train: {self.train_len}; Validation: {self.val_len}; Test: {self.test_len}]"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDSplitter object.
+        :returns: string representation of the object.
         """
         return str(self)
 
-    @property
-    def train_idx(self) -> Tuple[int, int]:
+    # INTERVALS
+
+    @staticmethod
+    def _bound_to_interval(bounds: Tuple[int, int]):
         """
-        :return: training set index boundaries
+        Returns a list of indexes within the given bounds.
+        :param bounds: index boundaries as a tuple (start, end).
+        :return: list of indexes
         """
-        return self._train_idx
+        a, b = bounds
+        return list(range(a, b))
 
     @property
-    def val_idx(self) -> Tuple[int, int]:
+    def train_idx(self) -> List[int]:
         """
-        :return: validation set index boundaries
+        Get the list of indexes representing the training set.
+        :return: List of training set indexes
         """
-        return self._val_idx
+        return self._bound_to_interval(bounds=self.train_bounds)
 
     @property
-    def test_idx(self) -> Tuple[int, int]:
+    def val_idx(self) -> List[int]:
         """
-        :return: test set index boundaries
+        Get the list of indexes representing the validation set.
+        :return: List of validation set indexes
         """
-        return self._test_idx
+        return self._bound_to_interval(bounds=self.val_bounds)
+
+    @property
+    def test_idx(self) -> List[int]:
+        """
+        Get the list of indexes representing the test set.
+        :return: List of test set indexes
+        """
+        return self._bound_to_interval(bounds=self.test_bounds)
+
+    @property
+    def train_bounds(self) -> Tuple[int, int]:
+        """
+        Get the index boundaries for the training set.
+        :returns: training set index boundaries as a tuple (start, end).
+        """
+        return self._train_bounds
+
+    @property
+    def val_bounds(self) -> Tuple[int, int]:
+        """
+        Get the index boundaries for the validation set.
+        :returns: validation set index boundaries as a tuple (start, end).
+        """
+        return self._val_bounds
+
+    @property
+    def test_bounds(self) -> Tuple[int, int]:
+        """
+        Get the index boundaries for the test set.
+        :returns: test set index boundaries as a tuple (start, end).
+        """
+        return self._test_bounds
 
     @property
     def train_len(self) -> int:
         """
-        :return: train length
+        Get the number of samples in the training set.
+        :returns: number of samples in the training set.
         """
-        return self._interval_len(ab=self.train_idx)
+        return len(self.train_idx)
 
     @property
     def val_len(self) -> int:
         """
-        :return: train length
+        Get the number of samples in the validation set.
+        :returns: number of samples in the validation set.
         """
-        return self._interval_len(ab=self.val_idx)
+        return len(self.val_idx)
 
     @property
     def test_len(self) -> int:
         """
-        :return: train length
+        Get the number of samples in the test set.
+        :returns: number of samples in the test set.
         """
-        return self._interval_len(ab=self.test_idx)
+        return len(self.test_idx)
 
-    @staticmethod
-    def _interval_len(ab: Tuple[int, int]) -> int:
-        """
-        Return the length of an interval
-        :param ab: interval
-        :return: interval length
-        """
-        a, b = ab
-        return b - a
+    # TRAINING SET STATISTICS
 
     def training_mean_std(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Computes mean and standard deviation over the training set
-            for every channel of min-max scaled images
-        Store the values in a .json file
-        :return: means and standard deviations for every channel
+        Compute mean and standard deviation over the training set for normalization.
+        :returns: means and standard deviations for each channel.
         """
 
-        channel_sum = np.zeros(3)  # for the mean
-        channel_sum_squared = np.zeros(3)  # for the standard deviation
+        # Initialize accumulators for mean and standard deviation calculations
+        channel_sum = np.zeros(3)
+        channel_sum_squared = np.zeros(3)
 
         collection = HandCollection()
 
-        a, b = self.train_idx
+        log(info="Converting points")
 
-        for train_idx in range(a, b):
-            log_progress(idx=train_idx, max_=self.train_len, ckp=500)
+        for train_idx in tqdm(self.train_idx):
 
-            img_arr = collection[train_idx].image_arr_mm  # we apply mix-max scaling
-
+            img_arr = collection[train_idx].image_arr_mm
             channel_sum += np.sum(img_arr, axis=(0, 1))
             channel_sum_squared += np.sum(img_arr ** 2, axis=(0, 1))
 
@@ -271,19 +363,17 @@ class FreiHANDSplit:
         new_size = DATA["new_size"]
         total_pixels = new_size * new_size * self.train_len
 
-        # Computing mean and standard deviation
+        # Compute mean and standard deviation
         channel_mean = channel_sum / total_pixels
         channel_std = np.sqrt((channel_sum_squared / total_pixels) - channel_mean ** 2)
 
+        # Store mean and standard deviation in a JSON file
         mean_std = {
             "mean": list(channel_mean),
             "std": list(channel_std)
         }
 
-        store_json(
-            path_=get_mean_std_file(),
-            obj=mean_std
-        )
+        store_json(path_=get_mean_std_file(), obj=mean_std)
 
         return channel_mean, channel_std
 
@@ -304,20 +394,19 @@ class FreiHANDDataset(Dataset):
         split_names = list(PRC.keys())
         percentages = list(PRC.values())
 
-        split = FreiHANDSplit(n=DATA["n_data"], percentages=percentages)
+        split = FreiHANDSplitter(n=DATA["n_data"], percentages=percentages)
+
+        self._indexes: List[int]
 
         if set_type == split_names[0]:
-            ab = split.train_idx
+            self._indexes = split.train_idx
         elif set_type == split_names[1]:
-            ab = split.val_idx
+            self._indexes = split.val_idx
         elif set_type == split_names[2]:
-            ab = split.test_idx
+            self._indexes = split.test_idx
         else:
             raise Exception(f"Invalid set name {set_type};"\
                             " choose one between {train; validation; set}")
-
-        a, b = ab
-        self._indexes: List[int] = list(range(a, b))
 
     def __str__(self) -> str:
         """
