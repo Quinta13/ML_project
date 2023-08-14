@@ -1,10 +1,12 @@
 """
-FreiHAND Dataset Handling
 
-This file contains classes and functions for working with the FreiHAND dataset
+FreiHAND Dataset Handling
+-------------------------
+
+This module contains classes for working with the FreiHAND dataset
  (downloading, conversion, splitting, loading, ...) tailored for hand pose estimation tasks.
 
-Contents:
+Classes:
 - FreiHANDDownloader: Provides methods for downloading and extracting the FreiHAND dataset.
 - FreiHAND2DConverter: Converts 3D hand pose points to 2D points using camera information.
 - FreiHANDSplit: Computes indexes for dataset splitting and calculates training set statistics.
@@ -56,6 +58,7 @@ class FreiHANDDownloader:
     def __str__(self) -> str:
         """
         Return a string representation of the FreiHANDDownloader object.
+
         :returns: string representation of the object.
         """
 
@@ -64,6 +67,7 @@ class FreiHANDDownloader:
     def __repr__(self) -> str:
         """
         Return a string representation of the FreiHANDDownloader object.
+
         :returns: string representation of the object.
         """
 
@@ -75,6 +79,7 @@ class FreiHANDDownloader:
     def is_downloaded(self) -> bool:
         """
         Check if the FreiHAND dataset is already downloaded.
+
         :return: True if the dataset is downloaded, False otherwise.
         """
 
@@ -107,7 +112,7 @@ class FreiHAND2DConverter:
      - file_2d: path to the 2D keypoints JSON file.
     """
 
-    # INITIALIZATION
+    # CONSTRUCTOR
 
     def __init__(self):
         """
@@ -124,6 +129,7 @@ class FreiHAND2DConverter:
     def __str__(self) -> str:
         """
         Return a string representation of the FreiHAND2DConverter object.
+
         :returns: string representation of the object.
         """
 
@@ -132,6 +138,7 @@ class FreiHAND2DConverter:
     def __repr__(self) -> str:
         """
         Return a string representation of the FreiHAND2DConverter object.
+
         :returns: string representation of the object.
         """
 
@@ -195,7 +202,7 @@ class FreiHANDSplitter:
      - test_bounds: index boundaries for the test set.
     """
 
-    # INITIALIZATION
+    # CONSTRUCTOR
 
     def __init__(self, n: int, percentages: List[float]):
         """
@@ -233,6 +240,7 @@ class FreiHANDSplitter:
     def __len__(self) -> int:
         """
         Get the total number of samples across all sets.
+
         :return: total number of samples.
         """
 
@@ -241,6 +249,7 @@ class FreiHANDSplitter:
     def __str__(self) -> str:
         """
         Return a string representation of the FreiHANDSplitter object.
+
         :returns: string representation of the object.
         """
 
@@ -249,8 +258,10 @@ class FreiHANDSplitter:
     def __repr__(self) -> str:
         """
         Return a string representation of the FreiHANDSplitter object.
+
         :returns: string representation of the object.
         """
+
         return str(self)
 
     # INTERVALS
@@ -259,9 +270,11 @@ class FreiHANDSplitter:
     def _bound_to_interval(bounds: Tuple[int, int]):
         """
         Returns a list of indexes within the given bounds.
+
         :param bounds: index boundaries as a tuple (start, end).
         :return: list of indexes
         """
+
         a, b = bounds
         return list(range(a, b))
 
@@ -269,72 +282,90 @@ class FreiHANDSplitter:
     def train_idx(self) -> List[int]:
         """
         Get the list of indexes representing the training set.
+
         :return: List of training set indexes
         """
+
         return self._bound_to_interval(bounds=self.train_bounds)
 
     @property
     def val_idx(self) -> List[int]:
         """
         Get the list of indexes representing the validation set.
+
         :return: List of validation set indexes
         """
+
         return self._bound_to_interval(bounds=self.val_bounds)
 
     @property
     def test_idx(self) -> List[int]:
         """
         Get the list of indexes representing the test set.
+
         :return: List of test set indexes
         """
+
         return self._bound_to_interval(bounds=self.test_bounds)
 
     @property
     def train_bounds(self) -> Tuple[int, int]:
         """
         Get the index boundaries for the training set.
+
         :returns: training set index boundaries as a tuple (start, end).
         """
+
         return self._train_bounds
 
     @property
     def val_bounds(self) -> Tuple[int, int]:
         """
         Get the index boundaries for the validation set.
+
         :returns: validation set index boundaries as a tuple (start, end).
         """
+
         return self._val_bounds
 
     @property
     def test_bounds(self) -> Tuple[int, int]:
         """
         Get the index boundaries for the test set.
+
         :returns: test set index boundaries as a tuple (start, end).
         """
+
         return self._test_bounds
 
     @property
     def train_len(self) -> int:
         """
         Get the number of samples in the training set.
+
         :returns: number of samples in the training set.
         """
+
         return len(self.train_idx)
 
     @property
     def val_len(self) -> int:
         """
         Get the number of samples in the validation set.
+
         :returns: number of samples in the validation set.
         """
+
         return len(self.val_idx)
 
     @property
     def test_len(self) -> int:
         """
         Get the number of samples in the test set.
+
         :returns: number of samples in the test set.
         """
+
         return len(self.test_idx)
 
     # TRAINING SET STATISTICS
@@ -342,6 +373,7 @@ class FreiHANDSplitter:
     def training_mean_std(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute mean and standard deviation over the training set for normalization.
+
         :returns: means and standard deviations for each channel.
         """
 
@@ -380,16 +412,26 @@ class FreiHANDSplitter:
 
 class FreiHANDDataset(Dataset):
     """
-    Class to load FreiHAND dataset
+    This class represents the FreiHAND dataset and provides an interface
+     to load different sets (train, validation, or test) of data samples.
+
+    Attributes:
+    - set_type: string representing the set to use (train, validation, or test).
+    - collection: HandCollection instance to load single items.
+    - indexes: list of indexes for the type of dataset.
     """
+
+    # CONSTRUCTOR
 
     def __init__(self, set_type: str):
         """
+        Initialize the FreiHANDDataset instance.
+
         :param set_type: name of set (train, val or test)
         """
 
-        self._set_type = set_type
-        self._collection = HandCollection()
+        self._set_type: str = set_type
+        self._collection: HandCollection = HandCollection()
 
         split_names = list(PRC.keys())
         percentages = list(PRC.values())
@@ -405,38 +447,53 @@ class FreiHANDDataset(Dataset):
         elif set_type == split_names[2]:
             self._indexes = split.test_idx
         else:
-            raise Exception(f"Invalid set name {set_type};"\
-                            " choose one between {train; validation; set}")
+            raise Exception(f"Invalid set name {set_type}; "
+                            "choose one between {train; validation; set}")
+
+    # REPRESENTATION
 
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDDataset object.
+
+        :returns: string representation of the object.
         """
+
         return f"FreiHAND [{self.set_type.capitalize()} - {len(self)} items]"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDDataset object.
+
+        :returns: string representation of the object.
         """
+
         return str(self)
+
+    # OVERRIDES
 
     def __len__(self) -> int:
         """
-        :return: data length
+        Get the number of data samples in the dataset.
+
+        :return: number of data samples.
         """
         return len(self._indexes)
 
     def __getitem__(self, idx) -> Dict[str, Any]:
         """
-        Return given pair image - heatmaps
-        :param idx: data index
-        :return: pair data-item, labels
+        Get a data sample and its labels based on the index.
+
+        :param idx: index of the data sample.
+        :return: item containing the data sample, heatmaps, and image name.
         """
 
+        # Compute index for the collection
         actual_idx = self._indexes[idx]
 
         hand = self._collection[actual_idx]
 
+        # Convert data to tensors
         X = hand.image_arr_z
         X = np.transpose(X, (2, 0, 1))  # move channels at first level
         X = torch.from_numpy(X)
@@ -452,8 +509,11 @@ class FreiHANDDataset(Dataset):
     @property
     def set_type(self) -> str:
         """
-        :return:  dataset set type
+        Get the type of dataset set.
+
+        :return: type of dataset set (train, validation, or test).
         """
+
         return self._set_type
 
 
@@ -463,6 +523,8 @@ class FreiHANDDataLoader(DataLoader):
     This class implements the DataLoader for FreiHand Dataset
     """
 
+    # CONSTRUCTOR OVERRIDE
+
     def __init__(self, dataset: FreiHANDDataset, batch_size: Optional[int] = 1, shuffle: Optional[bool] = None,
                  sampler: Union[Sampler, Iterable, None] = None,
                  batch_sampler: Union[Sampler[Sequence], Iterable[Sequence], None] = None, num_workers: int = 0,
@@ -471,6 +533,8 @@ class FreiHANDDataLoader(DataLoader):
                  generator=None, *, prefetch_factor: int = 2, persistent_workers: bool = False,
                  pin_memory_device: str = ""):
         """
+        Initialize an instance of FreiHANDDataLoader.
+        It basically specializes input dataset to FreiHANDDataset type.
 
         :param dataset: dataset from which to load the data.
         :param batch_size: how many samples per batch to load
@@ -522,12 +586,18 @@ class FreiHANDDataLoader(DataLoader):
 
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDDataLoader object.
+
+        :returns: string representation of the object.
         """
+
         return f"FreiHANDDataLoader [{self.dataset.set_type.capitalize()} - Batch size: {self.batch_size} - Length: {len(self)}]"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the FreiHANDDataLoader object.
+
+        :returns: string representation of the object.
         """
+
         return str(self)

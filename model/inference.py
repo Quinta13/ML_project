@@ -4,16 +4,11 @@ This class provides some class to make inference over results
 from typing import List, Tuple
 
 import numpy as np
-import torch
 from PIL import Image
-from matplotlib import pyplot as plt
 
-from io_ import read_image, read_json, get_2d_file, log, read_external_image, load_model
-from model.dataset import FreiHANDDataset
+from io_ import load_image, log, load_external_image, load_model
 from model.hand import Hand, HandCollection
-from model.network import HandPoseEstimationUNet
-from settings import FREIHAND_INFO, MODEL_CONFIG
-from utlis import from_image_to_heatmap
+from settings import FREIHAND_INFO
 
 
 class InferenceHand(Hand):
@@ -98,7 +93,7 @@ class InferenceHand(Hand):
         return np.sqrt((x_true - x_pred) ** 2 + (y_true - y_pred) ** 2)
 
     @property
-    def mean_pixel_distance(self):
+    def mean_pixel_error(self):
         """
         :return: mean pixel distance
         """
@@ -107,59 +102,33 @@ class InferenceHand(Hand):
             [self._keypoint_distance(key=i) for i in range(FREIHAND_INFO["n_keypoints"])]
         )
 
-    def plot_pred_heatmap(self, key: int):
-        """
-        Plots the heatmap for given keypoint
-        :param key: keypoint index
-        """
-
-        self._plot(img_array=self.get_pred_heatmap(key=key))
-
     def plot_pred_heatmaps(self):
         """
         Plots all the heatmaps in a single image
         """
 
-        self._plot(img_array=self._pred_heatmaps_all)
+        self._plot(img_array=self._pred_heatmaps_all, title="Predicted heatmaps")
 
     def plot_pred_skeleton(self):
-        self._plot(img_array=np.array(self.pred_skeleton))
+        self._plot(img_array=np.array(self.pred_skeleton), title="Predicted skeleton")
 
     def plot_heatmaps_comparison(self):
         """
         Plots heatmaps ground truth and predicted
         """
 
-        # Subplots
-        fig, axes = plt.subplots(1, 2, figsize=(10, 10))
-
-        # Plot original image
-        axes[0].imshow(self._heatmaps_all, cmap='gray')
-        axes[0].set_title('Ground_truth')
-        axes[0].axis('off')
-
-        # Plot original image
-        axes[1].imshow(self._pred_heatmaps_all, cmap='gray')
-        axes[1].set_title('Predicted')
-        axes[1].axis('off')
+        self._plot2(img_arrays=(self._heatmaps_all, self._pred_heatmaps_all),
+                    titles=("Ground truth", "Predicted"),
+                    main_title="Model Heatmaps Prediction")
 
     def plot_skeletons_comparison(self):
         """
         Plots heatmaps ground truth and predicted
         """
 
-        # Subplots
-        fig, axes = plt.subplots(1, 2, figsize=(10, 10))
-
-        # Plot original image
-        axes[0].imshow(self.skeleton)
-        axes[0].set_title('Ground_truth')
-        axes[0].axis('off')
-
-        # Plot original image
-        axes[1].imshow(self.pred_skeleton)
-        axes[1].set_title('Predicted')
-        axes[1].axis('off')
+        self._plot2(img_arrays=(np.array(self.skeleton), np.array(self.pred_skeleton)),
+                    titles=("Ground truth", "Predicted"),
+                    main_title="Model Heatmaps Prediction")
 
 
 class HandCollectionInference(HandCollection):
@@ -203,13 +172,13 @@ class HandCollectionInference(HandCollection):
 
         # Evaluating prediction
 
-        pred_heatmaps = from_image_to_heatmap(hand, self._model)
+        pred_heatmaps = hand.predict_heatmap(model=self._model)
 
         raw_idx = idx % FREIHAND_INFO["raw"]
 
         return InferenceHand(
             idx=idx,
-            image=read_image(idx=idx),
+            image=load_image(idx=idx),
             keypoints=self._keypoints[raw_idx],
             pred_heatmaps=pred_heatmaps
         )
@@ -229,7 +198,7 @@ class ExternalHand:
 
     def _get_inference_hand(self, model_fp) -> InferenceHand:
 
-        image = read_external_image(file_name=self._file_name)
+        image = load_external_image(file_name=self._file_name)
 
         hand = Hand(
             idx=0,
@@ -238,7 +207,7 @@ class ExternalHand:
         )
 
         model = load_model(model_fp)
-        pred_heatmaps = from_image_to_heatmap(hand, model)
+        pred_heatmaps = hand.predict_heatmap(model=model)
 
         return InferenceHand(
             idx=0,

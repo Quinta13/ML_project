@@ -1,3 +1,11 @@
+"""
+Training process
+----------------
+
+This module contains the Trainer class responsible for managing the training process,
+including data loading, model optimization, loss calculation, and monitoring.
+"""
+
 from typing import Dict, List
 
 import numpy as np
@@ -15,18 +23,48 @@ from settings import MODEL_CONFIG
 class Trainer:
 
     """
-    Class for managing the training process (data loading, model optimization, loss calculation, and monitoring)
-        in particular monitor loss in the validation set an stop the training when overfitting happens
+    Class that encapsulates the training process of a neural network model, handling data loading,
+    model optimization, loss computation, and monitoring. It also employs early stopping to mitigate overfitting.
+
+    Attributes:
+    - CHECKPOINT_FREQUENCY: Frequency at which to save model checkpoints during training.
+    - EARLY_STOPPING_EPOCHS: Number of consecutive epochs with non-decreasing validation loss to trigger early stopping.
+    - EARLY_STOPPING_AVG: Number of previous epochs to average for detecting early stopping.
+    - EARLY_STOPPING_PRECISION: Decimal places to round validation loss when checking for early stopping.
+    - model: The neural network model to be trained.
+    - criterion: Loss function for training.
+    - train_dataloader: DataLoader for the training dataset.
+    - val_dataloader: DataLoader for the validation dataset.
+    - epochs: Number of training epochs.
+    - batches_per_epoch: Number of batches per training epoch.
+    - batches_per_epoch_val: Number of batches per validation epoch.
+    - train_dataloader: DataLoader for the training dataset.
+    - val_dataloader: DataLoader for the validation dataset.
+    - optimizer: Optimizer for updating model parameters.
+    - scheduler: Learning rate scheduler to adjust learning rates during training.
+    - loss: Dictionary containing training and validation loss values.
     """
 
-    _CHECKPOINT_FREQUENCY: int = 100  # when to save model
-    _EARLY_STOPPING_EPOCHS: int = 10  # number of non-decreasing loss on validation
-    _EARLY_STOPPING_AVG: int = 10  # number of previous epochs to be averaged for early stopping
-    _EARLY_STOPPING_PRECISION: int = 5  # decimal places to round the validation loss for early stopping
+    _CHECKPOINT_FREQUENCY: int = 100
+    _EARLY_STOPPING_EPOCHS: int = 10
+    _EARLY_STOPPING_AVG: int = 10
+    _EARLY_STOPPING_PRECISION: int = 5
 
     def __init__(self, model: nn.Module, criterion: nn.Module,
                  train_dataloader: DataLoader, val_dataloader: DataLoader,
                  epochs: int, batches_per_epoch: int, batches_per_epoch_val: int):
+        """
+        Initialize the Trainer instance with necessary parameters.
+
+        Args:
+            model: The neural network model to be trained.
+            criterion: Loss function for training.
+            train_dataloader: DataLoader for the training dataset.
+            val_dataloader: DataLoader for the validation dataset.
+            epochs: Number of training epochs.
+            batches_per_epoch: Number of batches per training epoch.
+            batches_per_epoch_val: Number of batches per validation epoch.
+        """
 
         self._model = model
         self._criterion = criterion
@@ -49,53 +87,58 @@ class Trainer:
 
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return string representation for Trainer object.
+        :return: string representation for the object.
         """
         return f"Trainer [Epochs: {self._epochs}; Batches per Epoch: {self._batches_per_epoch}; " \
                f"Batches per Epoch Validation: {self._batches_per_epoch_val}]"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return string representation for Trainer object.
+        :return: string representation for the object.
         """
         return str(self)
 
     def train(self) -> nn.Module:
         """
-        Performs the training loop
-        :return: final model
+         Perform the training loop for the neural network model.
+
+        :return: The trained neural network model.
         """
 
-        # Creating directory where to save models
+        # Create directory to save models
         create_directory(path_=get_model_dir())
 
-        # Global variables
+        # Global variables for early stopping
         min_val_loss: float = .0
         no_decrease_epochs: int = 0
 
         # Iterates through epochs
         for epoch in range(self._epochs):
 
-            # Epoch fro
+            # Perform training and validation for the current epoch
             self._epoch_train()
             self._epoch_eval()
+
+            # Log epoch information
             log(
                 info=f"Epoch: {epoch + 1}/{self._epochs}, " \
                      f"Train Loss={np.round(self._loss['train'][-1], 10)}, "\
                      f"Val Loss={np.round(self._loss['val'][-1], 10)}"
             )
 
-            # Update learning rate
+            # Update learning rate using the scheduler
             self._scheduler.step(self._loss["train"][-1])
 
-            # Save model if checkpoint was reached
+            # Save model if checkpoint is reached
             if (epoch + 1) % self._CHECKPOINT_FREQUENCY == 0:
 
-                log(info=f"Saving checkpoint model: epoch {epoch}")
+                log(info=f"Saving checkpoint model: epoch {epoch+1}")
                 epoch_str = str(epoch + 1).zfill(len(str(self._epochs-1)))
                 self._save_model(suffix=epoch_str)
 
-            # Early stopping
+            # Check for early stopping
             if epoch < self._EARLY_STOPPING_AVG:
                 min_val_loss = np.round(np.mean(self._loss["val"]), self._EARLY_STOPPING_PRECISION)
                 no_decrease_epochs = 0
@@ -114,8 +157,7 @@ class Trainer:
                 log(info="Early Stopping")
                 break
 
-        # Save model and loss
-
+        # Save final model and loss information
         log(info="Saving final model")
         self._save_model(suffix='final')
         store_json(path_=get_loss_file(), obj=self.loss)
@@ -124,31 +166,35 @@ class Trainer:
 
     def _epoch_train(self):
         """
-        It performs and epoch over the training set over a batch
+        Perform an epoch over the training set using mini-batches.
+
+        This method trains the neural network model for one epoch using the training data in mini-batches.
+        It computes forward and backward passes, updates model parameters, and calculates the average loss
+        for the epoch.
         """
 
-        # set the training mode
+        # Set the model to training mode
         self._model.train()
 
         running_loss = []
 
-        # loop on batches
+        # Loop over training batches
         for i, data in enumerate(self._train_dataloader, 0):
 
-            # extract vectors and labels
+            # Extract input images and ground truth heatmaps
             inputs = data['image'].to(self._device)
             labels = data['heatmaps'].to(self._device)
 
-            # clear gradients from previous batches
+            # Clear gradients from previous batches
             self._optimizer.zero_grad()
 
-            # forward pass:
+            # Forward pass: compute predicted heatmaps
             outputs = self._model(inputs)
 
-            # compute the loss:
+            # Compute the loss:
             loss = self._criterion(outputs, labels)
 
-            # backward pass:
+            # Backward pass: compute gradients and update model parameters
             loss.backward()
 
             # update model using gradients:
@@ -156,7 +202,7 @@ class Trainer:
 
             running_loss.append(loss.item())
 
-            # batch limit check
+            # Check if the current batch limit has been reached
             if i == self._batches_per_epoch:
                 epoch_loss = np.mean(running_loss)
                 self._loss["train"].append(epoch_loss)
@@ -164,27 +210,36 @@ class Trainer:
 
     def _epoch_eval(self):
         """
-        It performs and epoch over the validation set with weights derived from the training
-            it compute the loss on the validation set
+        Perform an epoch over the validation set using mini-batches.
+
+        This method evaluates the neural network model on the validation data for one epoch using mini-batches.
+        It computes forward passes, calculates the validation loss,
+        and stores the average validation loss for the epoch.
         """
 
+        # Set the model to evaluation mode
         self._model.eval()
         running_loss = []
 
+        # Disable gradient computation during validation
         with torch.no_grad():
+
+            # Loop over validation batches
             for i, data in enumerate(self._train_dataloader, 0):
 
-                # extract vectors and labels
+                # Extract input images and ground truth heatmaps
                 inputs = data['image'].to(self._device)
                 labels = data['heatmaps'].to(self._device)
 
-                # compute loss on the actual model
+                # Compute predicted heatmaps
                 outputs = self._model(inputs)
+
+                # Compute the loss on validation data
                 loss = self._criterion(outputs, labels)
 
                 running_loss.append(loss.item())
 
-                # batch limit check
+                # Check if the current batch limit has been reached
                 if i == self._batches_per_epoch_val:
                     epoch_loss = np.mean(running_loss)
                     self._loss["val"].append(epoch_loss)
@@ -192,9 +247,11 @@ class Trainer:
 
     def _save_model(self, suffix: str):
         """
-        It saves the actual model with given suffix
-        :param suffix: suffix to model file
+        Save the current model's state dictionary with the given suffix.
+
+        :param suffix: string to be added to the model filename to distinguish between different checkpoints.
         """
+
         fp = get_model_file(suffix=suffix)
         log_io(info=f"Saving {fp}")
         torch.save(
@@ -205,13 +262,16 @@ class Trainer:
     @property
     def loss(self) -> Dict[str, List[float]]:
         """
-        :return: train and validation loss
+        Return a dictionary containing training and validation loss history.
+
+        :return: dictionary containing the history of training and validation loss.
         """
+
         return self._loss
 
     def plot_loss(self):
         """
-        It plots loss of training and validation over the epochs
+        Plot the training and validation loss over epochs.
         """
 
         epochs = range(1, len(self.loss["train"]) + 1)

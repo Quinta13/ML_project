@@ -1,21 +1,46 @@
 """
-This file contains some classes to handle Hand image, transformations, keypoints and heatmaps
+
+Hand handling
+-------------
+
+This module for handling Hand images, keypoints, transformations, and heatmaps.
+ It includes functionality to read, transform, visualize, and analyze Hand images and keypoints.
+ The module contains the following classes:
+
+Classes:
+- Hand: Represents an image of a hand with keypoints and provides methods for transformations and analysis.
+- HandCollection: Manages a collection of Hand objects with keypoints.
+
 """
 
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict
 
 import numpy as np
+import torch
 from PIL import Image, ImageDraw
 from matplotlib import pyplot as plt
+from torch import nn
 
-from io_ import read_json, read_image, get_2d_file, read_means_stds
+from io_ import read_json, load_image, get_2d_file, read_means_stds
 from settings import DATA, FREIHAND_INFO
-from utlis import pad_idx
 
-# CONNECTIONS
 KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
+    """
+    Keypoints Connections
+    
+    A dictionary that defines the connections between keypoints for different fingers.
+    The indices correspond to the keypoints of a hand and are used to visualize the connections between keypoints.
+    
+    Attributes:
+    - thumb: Connections for the thumb finger.
+    - index: Connections for the index finger.
+    - middle: Connections for the middle finger.
+    - ring: Connections for the ring finger.
+    - little: Connections for the little finger.
+    """
+    
     "thumb": [(0, 1), (1, 2), (2, 3), (3, 4)],
     "index": [(0, 5), (5, 6), (6, 7), (7, 8)],
     "middle": [(0, 9), (9, 10), (10, 11), (11, 12)],
@@ -23,15 +48,40 @@ KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
     "little": [(0, 17), (17, 18), (18, 19), (19, 20)],
 }
 
-# DRAW STYLE
 
 STYLE: Dict[str, int | float | str] = {
+    """
+    Draw Style
+    
+    The dictionary that defines the drawing style parameters for keypoints visualization.
+    
+    Attributes:
+    - point_color (str): Hexadecimal color code (e.g., "383838") used for drawing keypoints.
+    - point_radius (float): Radius of the circle used to represent keypoints.
+    - line_width (int): Width of the lines used to connect keypoints.
+    
+    """
+    
     "point_color": "383838",
     "point_radius": 1.5,
     "line_width": 1
 }
 
+
 COLORS: Dict[str, str] = {
+    """
+    Draw colors
+    
+    A dictionary that defines colors for different fingers in keypoints visualization.
+    
+    Attributes:
+    - thumb: Hexadecimal color code for the thumb finger.
+    - index: Hexadecimal color code for the index finger.
+    - middle: Hexadecimal color code for the middle finger.
+    - ring: Hexadecimal color code for the ring finger.
+    - little: Hexadecimal color code for the little finger.
+    """
+    
     "thumb": "008000",
     "index": "00FFFF",
     "middle": "0000FF",
@@ -41,27 +91,36 @@ COLORS: Dict[str, str] = {
 
 
 class Hand:
-
     """
-    This class read information about an Hand in terms of image and keypoints, moreover it can
-        - apply Z-transformation to images
-        - generate heatmaps for the keypoints
+    This class represents an instance of a hand with image, keypoints, and related operations.
+
+    The Hand class encapsulates information about a hand image along with its keypoints.
+     It provides methods to perform various operations on the hand image and keypoints,
+     including Z-transformation, heatmap generation, and visualization.
+
+    Attributes:
+    - idx: The dataset index of the hand image.
+    - image: The original hand image.
+    - keypoints: List of keypoints represented as (x, y) coordinates.
     """
 
-
-    # DUNDERS
+    # CONSTRUCTOR
 
     def __init__(self, idx: int, image: Image, keypoints: List):
         """
-        It read the image and get the keypoints,
-            it rescale them to NEW_SIZE from settings
-        :param idx: image dataset index
-        :param image: image
-        :param keypoints: keypoints
+        Initialize a Hand instance with the given dataset index, image, and keypoints.
+
+        This constructor initializes a Hand object with the provided parameters.
+         It resizes the image to the specified new size, scales the keypoints accordingly,
+         and stores the processed data.
+
+        :param idx: dataset index of the hand image.
+        :param image: original hand image.
+        :param keypoints: list of keypoints as (x, y) coordinates.
         """
 
-        # Pad to 8 digits
-        self._idx: str = pad_idx(idx=idx)
+        # Pad to the correct number of digits
+        self._idx: str = str(idx).zfill(FREIHAND_INFO["idx_digits"])
 
         # Resize to NEW_SIZE
         new_size = DATA["new_size"]
@@ -74,72 +133,109 @@ class Hand:
             for kp_x, kp_y in keypoints
         ]
 
+    # REPRESENTATION
+
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the Hand object.
+
+        :returns: string representation of the object.
         """
-        return f"Image {self.idx} [{self.image_info}]"
+
+        return f"Hand[{self.idx} [{self.image_info}]"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the Hand object.
+
+        :returns: string representation of the object.
         """
+
         return str(self)
 
-    # PROPERTIES
+    # INFO
 
     @property
     def is_raw(self) -> bool:
         """
-        :return: if image is raw
+        Get information about the image.
+
+        :returns: string containing information about the image, including size and mode.
         """
+
         return int(self.idx[:-4]) < FREIHAND_INFO["raw"]
 
     @property
     def is_augmented(self) -> bool:
         """
-        :return: if image is augmented
+        Check if the image is from the augmented dataset.
+
+        :returns: True if the image is from the augmented dataset, False otherwise.
         """
+
         return not self.is_raw
 
     @property
     def idx(self) -> str:
         """
-        :return: image dataset index
+        Get the formatted dataset index of the hand image.
+
+        :returns: formatted dataset index
         """
+
         return f"{self._idx}.{FREIHAND_INFO['ext']}"
+
+    @property
+    def image_info(self) -> str:
+        """
+        Get information about the image.
+
+        :returns: string containing information about the image, including size and mode.
+        """
+        return f"Size: {self.image.size}, Mode: {self.image.mode}"
+
+    # IMAGE
 
     @property
     def image(self) -> Image:
         """
-        :return: image
+        Get the original image.
+
+        :return: original image.
         """
+
         return self._image
 
     @property
     def image_arr(self) -> np.ndarray:
         """
-        :return: image as array
+        Get the image as a NumPy array.
+
+        :return: image as a NumPy array of shape (height, width, channels).
         """
+
         return np.array(self._image).astype(dtype=np.float32)
 
     @property
     def image_arr_mm(self) -> np.ndarray:
         """
-        :return: image min-max scaled
+        Get the min-max scaled image as a NumPy array.
+        :return: min-max scaled image as a NumPy array of shape (height, width, channels).
         """
         return self.image_arr / 255
 
     @property
     def image_arr_z(self) -> np.ndarray:
         """
-        :return: Z-transformation to image
+        Get the Z-transformed image as a NumPy array.
+        :return: Z-transformed image as a NumPy array of shape (height, width, channels).
         """
 
+        # Get means and standard deviations computed on Training Set
         means, stds = read_means_stds()
 
+        # Split channels
         img = self.image_arr_mm
-
         r_channel, g_channel, b_channel = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
         # Z-transform each channel with means and stds
@@ -150,41 +246,42 @@ class Hand:
         # Merge back into an image
         img_z = np.stack((r_channel, g_channel, b_channel), axis=-1)
 
-        return img_z
+        return np.clip(img_z, 0.0, 1.0)
 
-    @property
-    def image_info(self) -> str:
-        """
-        :return: information about the image
-        """
-        return f"Size: {self.image.size}, Mode: {self.image.mode}"
+    # KEYPOINTS
 
     @property
     def keypoints(self) -> List[Tuple]:
         """
-        :return: keypoints
+        Get the keypoints of the hand.
+
+        :returns: A list of tuples representing the keypoints of the hand.
+                  Each tuple contains the (x, y) coordinates of a keypoint.
         """
+
         return self._keypoints
 
     def _draw_skeleton(self, keypoints: List[Tuple[float, float]]) -> Image:
         """
-        Draws given keypoints to the skeleton
-        :param keypoints: list of keypoints
-        :return: image with skeleton
+        Draw the skeleton and keypoints on an image.
+
+        :param keypoints: list of tuples representing the keypoints to draw.
+        :returns: new image with the skeleton and keypoints drawn.
         """
 
+        # Create a copy of the image to draw on
         new_img = self.image.copy()
         draw = ImageDraw.Draw(new_img)
 
+        # Convert the point color from hex to RGB
         color_point = tuple(int(STYLE["point_color"][i:i + 2], 16) for i in (0, 2, 4)) + (0,)  # from hex to rgb
 
-        # Draw circles
+        # Draw circles for each keypoint
         for keypoint in keypoints:
 
-            x, y = keypoint
-
-            # Calculate the bounding box of the circle
             radius = STYLE["point_radius"]
+
+            x, y = keypoint
             x0 = x - radius
             y0 = y - radius
             x1 = x + radius
@@ -193,14 +290,14 @@ class Hand:
             # Draw the circle with the specified color and alpha
             draw.ellipse([(x0, y0), (x1, y1)], fill=color_point)
 
-        # Draw lines
+        # Draw lines connecting keypoints to represent fingers
         for finger_key, connection in KEYPOINTS_CONNECTIONS.items():
 
-            # finger color
+            # Finger color
             color = COLORS[finger_key]
             color_rgb = tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))  # from hex to rgb
 
-            # finger connections
+            # Finger connections
             for line in connection:
                 p1, p2 = line
                 draw.line([keypoints[p1], keypoints[p2]], fill=color_rgb, width=STYLE["line_width"])
@@ -210,7 +307,10 @@ class Hand:
     @property
     def skeleton(self) -> Image:
         """
-        :return: skeleton image
+        Get an image with the skeleton and keypoints drawn.
+
+        :return: an image with circles at keypoints and lines connecting keypoints,
+                 representing the skeleton of the hand.
         """
 
         return self._draw_skeleton(keypoints=self.keypoints)
@@ -219,15 +319,17 @@ class Hand:
 
     def get_heatmap(self, key: int) -> np.ndarray:
         """
-        Returns the heatmap for given keypoint
-        :param key: key index
-        :return: keypoint heatmap array in scale [0, 1]
+        Generate a heatmap for a specific keypoint.
+
+        :param key: the index of the keypoint for which to generate the heatmap.
+        :return: a 2D numpy array representing the heatmap of the specified keypoint.
         """
 
+        # Creating empty heatmap
         new_size = DATA["new_size"]
-
         heatmap = np.zeros((new_size, new_size), dtype=np.float32)
 
+        # Creating heatmap
         x0, y0 = self.keypoints[key]
         x = np.arange(0, new_size, 1, float)
         y = np.arange(0, new_size, 1, float)[:, np.newaxis]
@@ -239,8 +341,9 @@ class Hand:
     @property
     def heatmaps(self) -> np.ndarray:
         """
-        Returns heatmaps of keypoints
-        :return: all heatmaps array in scale [0, 1]
+        Generate heatmaps for all keypoints.
+
+        :return: A numpy array representing heatmaps for all keypoints.
         """
 
         return np.array([self.get_heatmap(key=i) for i in range(FREIHAND_INFO["n_keypoints"])])
@@ -248,149 +351,182 @@ class Hand:
     @property
     def _heatmaps_all(self) -> np.ndarray:
         """
-        Returns heatmaps in a single array
-        :return: heatmaps array
+        Generate a single heatmap with all keypoints.
+
+        :return: single array representing an heatmap that combine the presence of all keypoints.
         """
 
         return np.sum(self.heatmaps, axis=0)
 
+    def predict_heatmap(self, model: nn.Module) -> np.ndarray[np.ndarray[float]]:
+        """
+        Generate predicted heatmaps for keypoints using a neural network model.
+
+        :param model: A PyTorch neural network model for predicting heatmaps.
+
+        :returns: array representing the predicted heatmaps for all keypoints.
+                  The array shape is (num_keypoints, image_height, image_width).
+        """
+
+        # Convert the image to a numpy array and perform Z-score normalization
+        img = self.image_arr_z
+        img_transposed = np.transpose(a=img, axes=(2, 0, 1))
+        img_tensor = torch.from_numpy(ndarray=img_transposed).unsqueeze(0)
+
+        # Get the predicted heatmaps from the model
+        pred_heatmaps = model(img_tensor)[0].detach().numpy()
+
+        return pred_heatmaps
+
     # PLOT
 
-    @staticmethod
-    def _plot(img_array: np.ndarray):
+    def _plot(self, img_array: np.ndarray, title: str = ""):
         """
-        Draw image
-        :param img_array: heatmap array
+        Display image or heatmap.
+
+        :param img_array: image or heatmap array to be displayed.
+        :param title: title for the displayed image.
         """
 
-        if len(img_array.shape) == 2:  # grayscale
+        fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+
+        # Title
+        ax.set_title(f"{self.idx} - {title}")
+        ax.axis('off')
+
+        # Heatmap
+        if len(img_array.shape) == 2:
             plt.imshow(img_array, cmap='gray', interpolation='nearest')
-        else:  # rgb
+        # Image
+        else:
             plt.imshow(img_array)
-        plt.axis('off')
+
+        plt.show()
+
+    def _plot2(self, img_arrays: Tuple[np.ndarray, np.ndarray],
+               titles: Tuple[str, str], main_title: str):
+        """
+        Display two images side by side.
+
+        :param img_arrays: tuple of two image or heatmap arrays.
+        :param titles: titles for the two displayed images.
+        :param main_title: main title for the entire plot.
+        """
+
+        # Unpacking
+        img1, img2 = img_arrays
+        title1, title2 = titles
+
+        # Subplots
+        fig, axes = plt.subplots(1, 2, figsize=(7, 4))
+
+        for ax, img, title in zip([0, 1], [img1, img2], [title1, title2]):
+
+            # Heatmap
+            if len(img.shape) == 2:
+                axes[ax].imshow(img, cmap='gray', interpolation='nearest')
+            # Image
+            else:
+                axes[ax].imshow(img)
+
+            axes[ax].axis('off')
+            axes[ax].set_title(title)
+
+        # Add a title for both images
+        plt.suptitle(f"{self.idx} - {main_title}")
+
+        plt.show()
 
     def plot_image(self):
         """
-        Plots original image
+        Plot the original (raw) image.
         """
-        self._plot(img_array=np.array(self.image))
+
+        self._plot(img_array=np.array(self.image), title="Raw")
 
     def plot_image_normalized(self):
         """
-        Plots original image
+        Plot the normalized image.
         """
-        self._plot(img_array=self.image_arr_z)
+
+        self._plot(img_array=self.image_arr_z, title="Normalized")
 
     def plot_skeleton(self):
         """
-        Plots skeleton
-        """
-        self._plot(img_array=np.array(self.skeleton))
-
-    def plot_heatmap(self, key: int):
-        """
-        Plots the heatmap for given keypoint
-        :param key: keypoint index
+        Plot the image with keypoints connected by a skeleton.
         """
 
-        self._plot(img_array=self.get_heatmap(key=key))
+        self._plot(img_array=np.array(self.skeleton), title="Skeleton")
 
     def plot_heatmaps(self):
         """
-        Plots all the heatmaps in a single image
+        Plot all keypoints heatmaps in a single image.
         """
 
-        self._plot(img_array=self._heatmaps_all)
+        self._plot(img_array=self._heatmaps_all, title="Heatmaps")
 
     def plot_network_input(self):
         """
-        Plots input for the network
+        Plot the network input composed of the normalized image and heatmaps.
         """
 
-        means, stds = read_means_stds()
-
-        # Subplots
-        fig, axes = plt.subplots(1, 2, figsize=(10, 10))
-
-        # Plot original image
-        axes[0].imshow(self.image_arr_z)
-        axes[0].set_title('Feature vector')
-        axes[0].axis('off')
-
-        # Plot original image
-        axes[1].imshow(self._heatmaps_all, cmap='gray')
-        axes[1].set_title('Heatmaps')
-        axes[1].axis('off')
-
-    def plot_preparation(self):
-        """
-        Draws
-        :param means: mean for every channel
-        :param stds: standard deviation for every channel
-        """
-
-        # Subplots
-        fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-
-        # Plot original image
-        axes[0][0].imshow(self.image)
-        axes[0][0].set_title('Original Image')
-        axes[0][0].axis('off')
-
-        # Plot original image
-        axes[0][1].imshow(self.skeleton)
-        axes[0][1].set_title('Skeleton')
-        axes[0][1].axis('off')
-
-        # Plot Z-transformation
-        axes[1][0].imshow(self.image_arr_z)
-        axes[1][0].set_title('Feature vector')
-        axes[1][0].axis('off')
-
-        # Plot heatmaps
-        heatmap = np.sum(self.heatmaps, axis=0)
-        axes[1][1].imshow(heatmap, cmap='gray')
-        axes[1][1].set_title('Labels - Heatmaps')
-        axes[1][1].axis('off')
+        self._plot2(
+            img_arrays=(self.image_arr_z, self._heatmaps_all),
+            titles=("Normalized Image", "Heatmaps"),
+            main_title="Network Input"
+        )
 
 
 class HandCollection:
+    """
+    This class represents a collection of Hand objects and provides methods to automate their generation.
 
+    Attributes:
+     - keypoints: list of keypoints for each hand image.
     """
-    This class automatizes Hand class generation:
-     - it keeps in memory keypoint file
-     - it automatizes raw-augmented labeling handling
-    """
+
+    # CONSTRUCTOR
 
     def __init__(self):
         """
-        It basically reads keypoints file
+        Initialize a HandCollection object by reading and storing keypoints information.
         """
 
-        # we keep the file in memory and we read once
+        # Store keypoints information
         self._keypoints: List[List[List[float]]] = read_json(get_2d_file())
+
+    # REPRESENTATION
 
     def __str__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the HandCollection object.
+
+        :return: string representation for the object.
         """
+
         return f"HandCollection"
 
     def __repr__(self) -> str:
         """
-        :return: string representation for the object
+        Return a string representation of the HandCollection object.
+
+        :return: string representation for the object.
         """
+
         return str(self)
+
+    # ITEMS
 
     def __getitem__(self, idx: int) -> Hand:
         """
-        Return hand with given index
-        :param idx: index
-        :return: hand
+        Retrieve a specific Hand object from the collection by its index.
+
+        :param idx: the index of the Hand object to retrieve.
+        :return: hand object corresponding to the given index.
         """
 
-        # augmented labels are the same as raw ones
+        # Augmented labels are the same as raw ones
         raw_idx = idx % FREIHAND_INFO["raw"]
 
-        return Hand(idx=idx, image=read_image(idx=idx), keypoints=self._keypoints[raw_idx])
-
+        # Create and return a Hand object
+        return Hand(idx=idx, image=load_image(idx=idx), keypoints=self._keypoints[raw_idx])
