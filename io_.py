@@ -1,5 +1,10 @@
 """
-This file contains general purpose input/output function
+Input/Output Functions
+----------------------
+
+This module contains input/output functions for various tasks
+ such as (logging, directory and files path handling, file operations, ...)
+
 """
 
 from __future__ import annotations
@@ -18,36 +23,70 @@ from torch import nn
 
 from model.network import HandPoseEstimationUNet
 from settings import FREIHAND_INFO, MODEL_CONFIG
-from utlis import pad_idx
 
-# LOGGING
+"""
+Global Logging Configuration
+
+This boolean flag controls whether general logging is enabled or disabled,
+ Use this flag to control the level of general information logging in the module.
+ 
+- LOG` (bool): Set to `True` to enable general logging, and `False` to disable it.
+- `LOG_IO` (bool): Set to `True` to enable I/O specific logging, and `False` to disable it.
+
+"""
+
 LOG: bool = True
 LOG_IO: bool = False
+
+"""
+Directory Names
+
+This dictionary defines common directory names used in the module for different purposes.
+
+Attributes:
+- `freihand` (str): Name of the directory containing the FreiHAND dataset.
+- `external` (str): Name of the directory containing images external to the dataset.
+- `model` (str): Name of the directory containing machine learning model-related files.
+
+"""
 
 # DIRECTORIES AND FILES
 DIR_NAMES: Dict[str, str] = {
     "freihand": "FreiHAND",
-    "images": path.join("training", "rgb"),
-    "external": path.join("external"),
+    "external": "external",
     "model": "model"
 }
 
+"""
+File Names
+
+This dictionary defines common file names used in the module for different purposes.
+
+Attributes:
+- `2d` (str): Name of the file containing 2D coordinate data.
+- `file_mean_std` (str): Name of the file containing mean and standard deviation
+                          of the Training Set over different channels.
+- `loss` (str): Name of the file containing loss trend over Training and Validation set.
+- `model` (str): Base name of the model-related files (suffixes can be added for different versions).
+- `errors` (str): Name of the file containing errors on the Test set.
+
+"""
+
 FILES: Dict[str, str] = {
-    "3d": "training_xyz.json",
-    "camera": "training_K.json",
     "2d": "training_xy.json",
     "file_mean_std": "mean_std.json",
     "loss": "loss.json",
-    "model": "model"
+    "model": "model",
+    "errors": "errors.json"
 }
 
-""" LOG """
+# LOGGING FUNCTIONS
 
 
 def log(info: str):
     """
-    Log information if enabled from settings
-    :param info: information to be logged
+    Log the provided information if general logging is enabled.
+    :param info: information to be logged.
     """
     if LOG:
         print(f"INFO: {info}")
@@ -55,122 +94,132 @@ def log(info: str):
 
 def log_io(info: str):
     """
-    Log i/o information if enabled from settings
-    :param info: information to be logged
+    Log the provided input/output information if I/O logging is enabled.
+    :param info: information to be logged.
     """
+
     if LOG_IO:
         print(f"I/O: {info}")
 
 
-def log_progress(idx: int, max_: int, ckp: int = 100):
-    """
-    It logs progress over iterations
-    :param idx: current iteration
-    :param max_: maximum number of iteration
-    :param ckp: checkpoint when to log
-    """
-    if idx % ckp == 0:
-        log(info=f"Progress: [{idx}/{max_}] - {idx * 100 / max_:.2f}%")
-
-
-""" DIRECTORIES """
-
+# DIRECTORY FUNCTIONS
 
 def create_directory(path_: str):
     """
-    Create directory if it doesn't exist
-    :param path_: directory path
+    Create a directory at the specified path if it does not already exist.
+    :param path_: Path to the directory to be created.
     """
+
     if os.path.exists(path_):
+        # directory already exists
         log_io(f"Directory {path_} already exists ")
     else:
         os.makedirs(path_)
+        # directory doesn't exist
         log_io(f"Created directory {path_}")
 
 
 def get_root_dir() -> str:
     """
-    :return: path to root directory
+    Get the path to project root directory.
+    :return: path to the root directory.
     """
+
     return str(path.abspath(path.join(__file__, "../")))
 
 
 def get_dataset_dir() -> str:
     """
-    :return: path to root directory
+    Get dataset directory.
+    :return: path to the dataset directory.
     """
+
     return path.join(get_root_dir(), DIR_NAMES["freihand"])
 
 
 def get_images_dir() -> str:
     """
-    :return: path to image directory
+    Get images directory.
+    :return: path to the image directory.
     """
-    return path.join(get_dataset_dir(), DIR_NAMES["images"])
+
+    return path.join(get_dataset_dir(), FREIHAND_INFO["images"])
 
 
 def get_external_images() -> str:
     """
-    :return: path to external image directory
+    Get external images directory.
+    :return: path to the external image directory.
     """
+
     return path.join(get_dataset_dir(), DIR_NAMES["external"])
 
 
 def get_model_dir() -> str:
     """
-    :return: path to model directory
+    Get model information directory.
+    :return: path to the model directory.
     """
+
     return path.join(get_dataset_dir(), DIR_NAMES["model"])
+
+
+# FILES
 
 
 def get_2d_file() -> str:
     """
-    :return: path to 2-dimension file
+    Get 2D coordinate file.
+    :return: path to the 2D coordinate file.
     """
+
     return path.join(get_dataset_dir(), FILES["2d"])
 
 
 def get_mean_std_file() -> str:
     """
-    :return: path to mean and standard deviation file
+    Get mean and standard deviation file.
+    :return: path to mean and standard deviation file.
     """
+
     return path.join(get_dataset_dir(), FILES["file_mean_std"])
 
 
 def get_loss_file() -> str:
     """
-    :return: path to loss file
+    Get loss information file.
+    :return: path to loss file.
     """
+
     return path.join(get_model_dir(), FILES["loss"])
 
 
 def get_model_file(suffix: str = "final") -> str:
     """
-    :param: suffix for the name of file indicative of the model
-    :return: path to mean and standard deviation file
+    Get the path to a model file with an optional suffix.
+    :param: suffix indicating the version of the model file.
+    :return: path to the model file.
     """
+
     return path.join(get_model_dir(), f"{FILES['model']}_{suffix}")
 
 
-def read_means_stds() -> Tuple[np.ndarray, np.ndarray]:
+def get_errors_file() -> str:
     """
-    :return: means and standard deviations as arrays
+    Get errors file.
+    :return: path to errors file.
     """
-    means_stds = read_json(path_=get_mean_std_file())
 
-    means, stds = means_stds.values()
-
-    return np.array(means), np.array(stds)
+    return path.join(get_model_dir(), FILES["errors"])
 
 
-""" DOWNLOAD """
-
+# OPERATIONS
 
 def download_zip(url: str, dir_: str):
     """
-    This file downloads and extracts a .zip file from url to a target directory
-    :param url: url to download file
-    :param dir_: directory to extract file
+    Download a zip file from a given URL and extract its contents to a target directory.
+    :param url: URL to download the zip file from.
+    :param dir_: directory path to extract the contents of the zip file.
     """
 
     # Create download directory if it doesn't exist
@@ -193,14 +242,11 @@ def download_zip(url: str, dir_: str):
     os.remove(zip_file_path)
 
 
-""" FILES """
-
-
 def read_json(path_: str) -> Dict | List:
     """
-    Load dictionary from local .json file
-    :param path_: path for .json file
-    :return: object
+    Load a dictionary or list from a local JSON file.
+    :param path_: path to the JSON file to be read.
+    :return: loaded JSON object (dictionary or list).
     """
 
     log_io(info=f"Loading {path_} ")
@@ -211,47 +257,66 @@ def read_json(path_: str) -> Dict | List:
 
 def store_json(path_: str, obj: Dict | List):
     """
-    Stores given object as a json file
-    :param path_: path for .json file
-    :param obj: object to be stored
+    Store a dictionary or list as a JSON file at the specified path.
+    :param path_: path for the JSON file (to be created or overwritten).
+    :param obj: JSON object (dictionary or list) to be stored.
     """
 
     json_string = json.dumps(obj=obj)
 
-    log_io(info=f"Saving {path_} ")
+    # Check if file already existed
+    info_op = "Saving" if path.exists(path_) else "Overwriting"
+
+    log_io(info=f"{info_op} {path_} ")
 
     with open(path_, 'w') as json_file:
         json_file.write(json_string)
 
 
 def load_model(path_: str) -> nn.Module:
-    # define the model
+    """
+    Load a PyTorch model from a saved checkpoint file.
+    :param path_: path to the model checkpoint file.
+    :return: loaded PyTorch model.
+    """
+
+    # Model definition
     model = HandPoseEstimationUNet(
         in_channel=MODEL_CONFIG["in_channels"],
         out_channel=MODEL_CONFIG["out_channels"]
     )
 
-    # load the model from memory
+    # Load the model
+    log_io(info=f"Loading model {path_}")
     model.load_state_dict(
         state_dict=torch.load(
             f=path_,
             map_location=MODEL_CONFIG["device"]
         )
     )
-
     model.eval()
 
     return model
 
 
-""" IMAGE """
-
-
-def _read_image(path_: str) -> Image:
+def read_means_stds() -> Tuple[np.ndarray, np.ndarray]:
     """
-    Read image from local file
-    :param path_: path to image file
-    :return: image
+    Load mean and standard deviation values from a local JSON file.
+    :return: tuple containing  means and standard deviations.
+    """
+
+    means_stds = read_json(path_=get_mean_std_file())
+
+    means, stds = means_stds.values()
+
+    return np.array(means), np.array(stds)
+
+
+def _load_image(path_: str) -> Image:
+    """
+    load an image from a local file.
+    :param path_: path to image file to be load.
+    :return: loaded image as a PIL Image object.
     """
 
     log_io(info=f"Reading image {path_}")
@@ -259,28 +324,30 @@ def _read_image(path_: str) -> Image:
     return Image.open(fp=path_)
 
 
-def read_image(idx: int) -> Image:
+def load_image(idx: int) -> Image:
     """
-    Read an image from the directory given its index
-    :param idx: image index
-    :return: image
-    """
-
-    file_ = f"{pad_idx(idx=idx)}.{FREIHAND_INFO['ext']}"
-    dir_ = get_images_dir()
-
-    img_path = path.join(dir_, file_)
-
-    return _read_image(path_=img_path)
-
-
-def read_external_image(file_name: str) -> Image:
-    """
-    Read an image from the directory given its index
-    :param file_name: name of image in the directory
-    :return: image
+    Read and load an image from a directory images based on its index.
+    :param idx: index of the images to be read.
+    :return: loaded image as a PIL Image object.
     """
 
+    # Computing file path
+    padded_idx = str(idx).zfill(FREIHAND_INFO["idx_digits"])
+    file_ = f"{padded_idx}.{FREIHAND_INFO['ext']}"
+
+    img_path = path.join(get_images_dir(), file_)
+
+    return _load_image(path_=img_path)
+
+
+def load_external_image(file_name: str) -> Image:
+    """
+    Read and load an image from a external images with a specified file name.
+    :param file_name: name of the images to be read (including extension)
+    :return: loaded image as a PIL Image object.
+    """
+
+    # Computing file path
     img_path = path.join(get_external_images(), file_name)
 
-    return _read_image(path_=img_path)
+    return _load_image(path_=img_path)
