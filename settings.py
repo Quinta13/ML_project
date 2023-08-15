@@ -17,23 +17,21 @@ from typing import Dict, Any
 
 import torch
 
+"""
+Dataset information
 
+Attributes:
+- `url` (str): URL to the dataset.
+- `images` (str): File path to the images within the dataset.
+- `3d` (str): File containing 3D coordinates data.
+- `camera` (str): File containing camera information.
+- `size` (int): Size of images (both width and height).
+- `ext` (str): File extension for images.
+- `raw` (int): Number of raw data.
+- `n_keypoints` (int): Number of keypoints in the dataset.
+- `idx_digits` (int): Number of digits images' index.
+"""
 FREIHAND_INFO: Dict[str, str | int] = {
-    """
-    Dataset information
-    
-    Attributes:
-    - `url` (str): URL to the dataset.
-    - `images` (str): File path to the images within the dataset.
-    - `3d` (str): File containing 3D coordinates data.
-    - `camera` (str): File containing camera information.
-    - `size` (int): Size of images (both width and height).
-    - `ext` (str): File extension for images.
-    - `raw` (int): Number of raw data.
-    - `n_keypoints` (int): Number of keypoints in the dataset.
-    - `idx_digits` (int): Number of digits images' index.
-    """
-    
     "url": "https://lmb.informatik.uni-freiburg.de/data/freihand/FreiHAND_pub_v2.zip",
     "images": path.join("training", "rgb"),
     "3d": "training_xyz.json",
@@ -46,54 +44,52 @@ FREIHAND_INFO: Dict[str, str | int] = {
 }
 
 
+"""
+Data Preparation Settings
+
+Attributes:
+- `n_data` (int): Items to use with the model.
+- `new_size` (int): Target dimension for images resize (both width and height).
+- `sigma_blur` (str): Radius for heatmap blur.
+"""
 DATA: Dict[str, int | float | str] = {
-    """
-    Data Preparation Settings
-    
-    Attributes:
-    - `n_data` (int): Items to use with the model.
-    - `new_size` (int): Target dimension for images resize (both width and height).
-    - `sigma_blur` (str): Radius for heatmap blur.
-    """
-    
     "n_data": 32560,
     "new_size": 128,
     "sigma_blur": 3.0
 }
 
+
+"""
+Dataset Percentages
+
+Attributes:
+- `train` (float): Training set percentage.
+- `val` (float): Validation set percentage.
+- `test` (float): Test set percentage.
+
+The three value must sum up to 1.0 as compliant with probability distribution
+"""
 PRC: Dict[str, float] = {
-    """
-    Dataset Percentages
-    
-    Attributes:
-    - `train` (float): Training set percentage.
-    - `val` (float): Validation set percentage.
-    - `test` (float): Test set percentage.
-    
-    The three value must sum up to 1.0 as compliant with probability distribution
-    """
-    
     "train": 0.7985257985257985,
     "val": 0.15356265356265356,
     "test": 0.04791154791154791
 }
 
 
+"""
+Model Configuration
+
+Attributes:
+- `device` (torch.device): Device to be used for computation (GPU if available, else CPU).
+- `in_channels` (int): Number of input channels (e.g., 3 for RGB images).
+- `out_channels` (int): Number of output channels (e.g., number of keypoints).
+- `learning_rate` (float): Learning rate for the model training.
+- `epochs` (int): Number of training epochs.
+- `batch_size` (int): Batch size used during training.
+- `batches_per_epoch` (int): Number of batches processed in each training epoch.
+- `batches_per_epoch_val` (int): Number of batches processed in each validation epoch.
+"""
 MODEL_CONFIG: Dict[str, Any] = {
-    """
-    Model Configuration
-    
-    Attributes:
-    - `device` (torch.device): Device to be used for computation (GPU if available, else CPU).
-    - `in_channels` (int): Number of input channels (e.g., 3 for RGB images).
-    - `out_channels` (int): Number of output channels (e.g., number of keypoints).
-    - `learning_rate` (float): Learning rate for the model training.
-    - `epochs` (int): Number of training epochs.
-    - `batch_size` (int): Batch size used during training.
-    - `batches_per_epoch` (int): Number of batches processed in each training epoch.
-    - `batches_per_epoch_val` (int): Number of batches processed in each validation epoch.
-    """
-    
     "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     "in_channels": 3,
     "out_channels": 21,

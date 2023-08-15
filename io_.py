@@ -40,39 +40,41 @@ LOG_IO: bool = False
 
 
 # DIRECTORIES AND FILES
+
+"""
+Directory Names
+
+This dictionary defines common directory names used in the module for different purposes.
+
+Attributes:
+- `freihand` (str): Name of the directory containing the FreiHAND dataset.
+- `external` (str): Name of the directory containing images external to the dataset.
+- `model` (str): Name of the directory containing machine learning model-related files.
+"""
 DIR_NAMES: Dict[str, str] = {
-    """
-    Directory Names
-    
-    This dictionary defines common directory names used in the module for different purposes.
-    
-    Attributes:
-    - `freihand` (str): Name of the directory containing the FreiHAND dataset.
-    - `external` (str): Name of the directory containing images external to the dataset.
-    - `model` (str): Name of the directory containing machine learning model-related files.
-    
-    """
+
     "freihand": "FreiHAND",
     "external": "external",
     "model": "model"
 }
 
 
+"""
+File Names
+
+This dictionary defines common file names used in the module for different purposes.
+
+Attributes:
+- `2d` (str): Name of the file containing 2D coordinate data.
+- `file_mean_std` (str): Name of the file containing mean and standard deviation
+                          of the Training Set over different channels.
+- `loss` (str): Name of the file containing loss trend over Training and Validation set.
+- `model` (str): Base name of the model-related files (suffixes can be added for different versions).
+- `errors` (str): Name of the file containing errors on the Test set.
+
+"""
 FILES: Dict[str, str] = {
-    """
-    File Names
-    
-    This dictionary defines common file names used in the module for different purposes.
-    
-    Attributes:
-    - `2d` (str): Name of the file containing 2D coordinate data.
-    - `file_mean_std` (str): Name of the file containing mean and standard deviation
-                              of the Training Set over different channels.
-    - `loss` (str): Name of the file containing loss trend over Training and Validation set.
-    - `model` (str): Base name of the model-related files (suffixes can be added for different versions).
-    - `errors` (str): Name of the file containing errors on the Test set.
-    
-    """
+
     
     "2d": "training_xy.json",
     "file_mean_std": "mean_std.json",

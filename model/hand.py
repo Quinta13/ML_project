@@ -26,21 +26,21 @@ from torch import nn
 from io_ import read_json, load_image, get_2d_file, read_means_stds
 from settings import DATA, FREIHAND_INFO
 
+
+"""
+Keypoints Connections
+
+A dictionary that defines the connections between keypoints for different fingers.
+The indices correspond to the keypoints of a hand and are used to visualize the connections between keypoints.
+
+Attributes:
+- thumb: Connections for the thumb finger.
+- index: Connections for the index finger.
+- middle: Connections for the middle finger.
+- ring: Connections for the ring finger.
+- little: Connections for the little finger.
+"""
 KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
-    """
-    Keypoints Connections
-    
-    A dictionary that defines the connections between keypoints for different fingers.
-    The indices correspond to the keypoints of a hand and are used to visualize the connections between keypoints.
-    
-    Attributes:
-    - thumb: Connections for the thumb finger.
-    - index: Connections for the index finger.
-    - middle: Connections for the middle finger.
-    - ring: Connections for the ring finger.
-    - little: Connections for the little finger.
-    """
-    
     "thumb": [(0, 1), (1, 2), (2, 3), (3, 4)],
     "index": [(0, 5), (5, 6), (6, 7), (7, 8)],
     "middle": [(0, 9), (9, 10), (10, 11), (11, 12)],
@@ -49,39 +49,37 @@ KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
 }
 
 
+"""
+Draw Style
+
+The dictionary that defines the drawing style parameters for keypoints visualization.
+
+Attributes:
+- point_color (str): Hexadecimal color code (e.g., "383838") used for drawing keypoints.
+- point_radius (float): Radius of the circle used to represent keypoints.
+- line_width (int): Width of the lines used to connect keypoints.
+
+"""
 STYLE: Dict[str, int | float | str] = {
-    """
-    Draw Style
-    
-    The dictionary that defines the drawing style parameters for keypoints visualization.
-    
-    Attributes:
-    - point_color (str): Hexadecimal color code (e.g., "383838") used for drawing keypoints.
-    - point_radius (float): Radius of the circle used to represent keypoints.
-    - line_width (int): Width of the lines used to connect keypoints.
-    
-    """
-    
     "point_color": "383838",
     "point_radius": 1.5,
     "line_width": 1
 }
 
 
+"""
+Draw colors
+
+A dictionary that defines colors for different fingers in keypoints visualization.
+
+Attributes:
+- thumb: Hexadecimal color code for the thumb finger.
+- index: Hexadecimal color code for the index finger.
+- middle: Hexadecimal color code for the middle finger.
+- ring: Hexadecimal color code for the ring finger.
+- little: Hexadecimal color code for the little finger.
+"""
 COLORS: Dict[str, str] = {
-    """
-    Draw colors
-    
-    A dictionary that defines colors for different fingers in keypoints visualization.
-    
-    Attributes:
-    - thumb: Hexadecimal color code for the thumb finger.
-    - index: Hexadecimal color code for the index finger.
-    - middle: Hexadecimal color code for the middle finger.
-    - ring: Hexadecimal color code for the ring finger.
-    - little: Hexadecimal color code for the little finger.
-    """
-    
     "thumb": "008000",
     "index": "00FFFF",
     "middle": "0000FF",
@@ -106,7 +104,7 @@ class Hand:
 
     # CONSTRUCTOR
 
-    def __init__(self, idx: int, image: Image, keypoints: List):
+    def __init__(self, idx: int | str, image: Image, keypoints: List):
         """
         Initialize a Hand instance with the given dataset index, image, and keypoints.
 
@@ -114,13 +112,13 @@ class Hand:
          It resizes the image to the specified new size, scales the keypoints accordingly,
          and stores the processed data.
 
-        :param idx: dataset index of the hand image.
+        :param idx: dataset index of the hand image, or name of the file.
         :param image: original hand image.
         :param keypoints: list of keypoints as (x, y) coordinates.
         """
 
         # Pad to the correct number of digits
-        self._idx: str = str(idx).zfill(FREIHAND_INFO["idx_digits"])
+        self._idx: int | str = str(idx).zfill(FREIHAND_INFO["idx_digits"]) if type(idx) == int else idx
 
         # Resize to NEW_SIZE
         new_size = DATA["new_size"]
@@ -371,7 +369,7 @@ class Hand:
         # Convert the image to a numpy array and perform Z-score normalization
         img = self.image_arr_z
         img_transposed = np.transpose(a=img, axes=(2, 0, 1))
-        img_tensor = torch.from_numpy(ndarray=img_transposed).unsqueeze(0)
+        img_tensor = torch.from_numpy(img_transposed).unsqueeze(0)
 
         # Get the predicted heatmaps from the model
         pred_heatmaps = model(img_tensor)[0].detach().numpy()
