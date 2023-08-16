@@ -17,7 +17,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from io_ import log, create_directory, store_json, get_loss_file, log_io
+from io_ import log, create_directory, store_json, get_loss_file, log_io, get_model_dir, get_model_file
 
 
 class Trainer:
@@ -39,7 +39,7 @@ class Trainer:
     - epochs: Number of training epochs.
     - batches_per_epoch: Number of batches per training epoch.
     - batches_per_epoch_val: Number of batches per validation epoch.
-    - model_dir: Directory where to save the model.
+    - model_name: Name of the model.
     - X_name: Item name for feature vector.
     - y_name: Item name for label.
     - optimizer: Optimizer for updating model parameters.
@@ -68,7 +68,7 @@ class Trainer:
             - `batches_per_epoch`: Number of batches per training epoch.
             - `batches_per_epoch_val`: Number of batches per validation epoch.
             - `learning_rate`: Model learning rate.
-            - `model_dir`: Directory where to save the model.
+            - `model_name`: Name of the model.
             - `X_name`: Item name for feature vector.
             - `y_name`: Item name for label.
         """
@@ -82,7 +82,7 @@ class Trainer:
         self._batches_per_epoch = config["batches_per_epoch"]
         self._batches_per_epoch_val = config["batches_per_epoch_val"]
 
-        self._model_dir = config["model_dir"]
+        self._model_name = config["model_name"]
         self._X_name = config["X_name"]
         self._y_name = config["y_name"]
 
@@ -119,7 +119,7 @@ class Trainer:
         """
 
         # Create directory to save models
-        create_directory(path_=self._model_dir)
+        create_directory(path_=get_model_dir(model_name=self._model_name))
 
         # Global variables for early stopping
         min_val_loss: float = .0
@@ -171,7 +171,7 @@ class Trainer:
         # Save final model and loss information
         log(info="Saving final model")
         self._save_model(suffix='final')
-        store_json(path_=get_loss_file(), obj=self.loss)
+        store_json(path_=get_loss_file(model_name=self._model_name), obj=self.loss)
 
         return self._model
 
@@ -263,7 +263,7 @@ class Trainer:
         :param suffix: string to be added to the model filename to distinguish between different checkpoints.
         """
 
-        fp = path.join(self._model_dir, f"model_{suffix}")
+        fp = get_model_file(model_name=self._model_name, suffix=suffix)
         log_io(info=f"Saving {fp}")
         torch.save(
             obj=self._model.state_dict(),

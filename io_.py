@@ -22,7 +22,7 @@ from PIL import Image
 from torch import nn
 
 from model.network import HandPoseEstimationUNet
-from settings import FREIHAND_INFO, MODEL_CONFIG
+from settings import FREIHAND_INFO
 
 """
 Global Logging Configuration
@@ -197,25 +197,27 @@ def get_mean_std_file() -> str:
     return path.join(get_dataset_dir(), FILES["file_mean_std"])
 
 
-def get_loss_file() -> str:
+def get_loss_file(model_name: str) -> str:
     """
     Get loss information file.
 
+    :param model_name: name of the model.
     :return: path to loss file.
     """
 
-    return path.join(get_model_dir(), FILES["loss"])
+    return path.join(get_model_dir(model_name=model_name), FILES["loss"])
 
 
-def get_model_file(suffix: str = "final") -> str:
+def get_model_file(model_name: str, suffix: str = "final") -> str:
     """
     Get the path to a model file with an optional suffix.
 
-    :param: suffix indicating the version of the model file.
+    :param model_name: name of the model.
+    :param suffix: indicating the version of the model file.
     :return: path to the model file.
     """
 
-    return path.join(get_model_dir(), f"{FILES['model']}_{suffix}")
+    return path.join(get_model_dir(model_name=model_name), f"{FILES['model']}_{suffix}")
 
 
 def get_errors_file() -> str:
@@ -291,18 +293,19 @@ def store_json(path_: str, obj: Dict | List):
         json_file.write(json_string)
 
 
-def load_model(path_: str) -> nn.Module:
+def load_model(path_: str, config: Dict) -> nn.Module:
     """
     Load a PyTorch model from a saved checkpoint file.
 
     :param path_: path to the model checkpoint file.
+    :param config: configuration file.
     :return: loaded PyTorch model.
     """
 
     # Model definition
     model = HandPoseEstimationUNet(
-        in_channel=MODEL_CONFIG["in_channels"],
-        out_channel=MODEL_CONFIG["out_channels"]
+        in_channel=config["in_channels"],
+        out_channel=config["out_channels"]
     )
 
     # Load the model
@@ -310,7 +313,7 @@ def load_model(path_: str) -> nn.Module:
     model.load_state_dict(
         state_dict=torch.load(
             f=path_,
-            map_location=MODEL_CONFIG["device"]
+            map_location=config["device"]
         )
     )
     model.eval()
