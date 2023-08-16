@@ -118,7 +118,8 @@ class Hand:
         """
 
         # Pad to the correct number of digits
-        self._idx: int | str = str(idx).zfill(FREIHAND_INFO["idx_digits"]) if type(idx) == int else idx
+        self._idx: str = f"{str(idx).zfill(FREIHAND_INFO['idx_digits'])}.{FREIHAND_INFO['ext']}"\
+            if type(idx) == int else idx
 
         # Resize to NEW_SIZE
         new_size = DATA["new_size"]
@@ -181,7 +182,7 @@ class Hand:
         :returns: formatted dataset index
         """
 
-        return f"{self._idx}.{FREIHAND_INFO['ext']}"
+        return self._idx
 
     @property
     def image_info(self) -> str:

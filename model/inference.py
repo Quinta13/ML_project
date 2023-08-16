@@ -273,6 +273,8 @@ class ExternalHand:
     - hand: InferenceHand instance for the external hand image.
     """
 
+    # CONSTRUCTOR
+
     def __init__(self, file_name: str, model_fp: str):
         """
         Initialize an ExternalHand instance.
@@ -281,8 +283,26 @@ class ExternalHand:
         :param model_fp: file path to the trained HandPoseEstimation network model.
         """
 
-        self._file_name = file_name
-        self._hand = self._get_inference_hand(model_fp=model_fp)
+        self._file_name: str = file_name
+        self._hand: InferenceHand = self._get_inference_hand(model_fp=model_fp)
+
+    # REPRESENTATION
+
+    def __str__(self):
+        """
+        Get string representation of ExternalHand object
+        :return: string representation of the object
+        """
+
+        return f"ExternalHand[{self.idx} [{self._hand.image_info}]"
+
+    def __repr__(self):
+        """
+        Get string representation of ExternalHand object
+        :return: string representation of the object
+        """
+
+        return str(self)
 
     def _get_inference_hand(self, model_fp) -> InferenceHand:
         """

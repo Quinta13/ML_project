@@ -88,8 +88,9 @@ Attributes:
 - `batch_size` (int): Batch size used during training.
 - `batches_per_epoch` (int): Number of batches processed in each training epoch.
 - `batches_per_epoch_val` (int): Number of batches processed in each validation epoch.
+- `model_name` (str): Name of the model, files will be stored in the directory with its names.
 """
-MODEL_CONFIG: Dict[str, Any] = {
+HANDPOSE_MODEL_CONFIG: Dict[str, Any] = {
     "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     "in_channels": 3,
     "out_channels": 21,
@@ -97,5 +98,16 @@ MODEL_CONFIG: Dict[str, Any] = {
     "epochs": 1000,
     "batch_size": 48,
     "batches_per_epoch": 50,
-    "batches_per_epoch_val": 20
+    "batches_per_epoch_val": 20,
+    "model_name": "trial"
+}
+
+LEFT_RIGHT_MODEL_CONFIG: Dict[str, Any] = {
+    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    "learning_rate": 0.1,
+    "epochs": 1000,
+    "batch_size": 48,
+    "batches_per_epoch": 50,
+    "batches_per_epoch_val": 20,
+    "model_name": "left_right_model"
 }

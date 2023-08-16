@@ -49,13 +49,11 @@ This dictionary defines common directory names used in the module for different 
 Attributes:
 - `freihand` (str): Name of the directory containing the FreiHAND dataset.
 - `external` (str): Name of the directory containing images external to the dataset.
-- `model` (str): Name of the directory containing machine learning model-related files.
 """
-DIR_NAMES: Dict[str, str] = {
 
+DIR_NAMES: Dict[str, str] = {
     "freihand": "FreiHAND",
     "external": "external",
-    "model": "model"
 }
 
 
@@ -165,14 +163,15 @@ def get_external_images() -> str:
     return path.join(get_dataset_dir(), DIR_NAMES["external"])
 
 
-def get_model_dir() -> str:
+def get_model_dir(model_name: str) -> str:
     """
     Get model information directory.
 
+    :param: name of the model.
     :return: path to the model directory.
     """
 
-    return path.join(get_dataset_dir(), DIR_NAMES["model"])
+    return path.join(get_dataset_dir(), model_name)
 
 
 # FILES

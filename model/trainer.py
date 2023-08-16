@@ -6,6 +6,7 @@ This module contains the Trainer class responsible for managing the training pro
 including data loading, model optimization, loss calculation, and monitoring.
 """
 
+from os import path
 from typing import Dict, List
 
 import numpy as np
@@ -16,8 +17,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from io_ import log, create_directory, get_model_dir, get_model_file, store_json, get_loss_file, log_io
-from settings import MODEL_CONFIG
+from io_ import log, create_directory, store_json, get_loss_file, log_io
 
 
 class Trainer:
@@ -35,11 +35,13 @@ class Trainer:
     - criterion: Loss function for training.
     - train_dataloader: DataLoader for the training dataset.
     - val_dataloader: DataLoader for the validation dataset.
+    - device: Hardware component to run the model.
     - epochs: Number of training epochs.
     - batches_per_epoch: Number of batches per training epoch.
     - batches_per_epoch_val: Number of batches per validation epoch.
-    - train_dataloader: DataLoader for the training dataset.
-    - val_dataloader: DataLoader for the validation dataset.
+    - model_dir: Directory where to save the model.
+    - X_name: Item name for feature vector.
+    - y_name: Item name for label.
     - optimizer: Optimizer for updating model parameters.
     - scheduler: Learning rate scheduler to adjust learning rates during training.
     - loss: Dictionary containing training and validation loss values.
@@ -52,33 +54,42 @@ class Trainer:
 
     def __init__(self, model: nn.Module, criterion: nn.Module,
                  train_dataloader: DataLoader, val_dataloader: DataLoader,
-                 epochs: int, batches_per_epoch: int, batches_per_epoch_val: int):
+                 config: Dict[str, any]):
         """
         Initialize the Trainer instance with necessary parameters.
 
-        Args:
-            model: The neural network model to be trained.
-            criterion: Loss function for training.
-            train_dataloader: DataLoader for the training dataset.
-            val_dataloader: DataLoader for the validation dataset.
-            epochs: Number of training epochs.
-            batches_per_epoch: Number of batches per training epoch.
-            batches_per_epoch_val: Number of batches per validation epoch.
+        :param model: the neural network model to be trained.
+        :param criterion: loss function for training.
+        :param train_dataloader: DataLoader for the training dataset.
+        :param val_dataloader: DataLoader for the validation dataset.
+        :param config: configuration dictionary, it must contain:
+            - `device`: Hardware component to run the model.
+            - `epochs`: Number of training epochs.
+            - `batches_per_epoch`: Number of batches per training epoch.
+            - `batches_per_epoch_val`: Number of batches per validation epoch.
+            - `learning_rate`: Model learning rate.
+            - `model_dir`: Directory where to save the model.
+            - `X_name`: Item name for feature vector.
+            - `y_name`: Item name for label.
         """
 
         self._model = model
         self._criterion = criterion
 
-        self._device = MODEL_CONFIG["device"]
+        self._device = config["device"]
 
-        self._epochs = epochs
-        self._batches_per_epoch = batches_per_epoch
-        self._batches_per_epoch_val = batches_per_epoch_val
+        self._epochs = config["epochs"]
+        self._batches_per_epoch = config["batches_per_epoch"]
+        self._batches_per_epoch_val = config["batches_per_epoch_val"]
+
+        self._model_dir = config["model_dir"]
+        self._X_name = config["X_name"]
+        self._y_name = config["y_name"]
 
         self._train_dataloader: DataLoader = train_dataloader
         self._val_dataloader: DataLoader = val_dataloader
 
-        self._optimizer: SGD = SGD(params=model.parameters(), lr=MODEL_CONFIG["learning_rate"])
+        self._optimizer: SGD = SGD(params=model.parameters(), lr=config["learning_rate"])
         self._scheduler: ReduceLROnPlateau = ReduceLROnPlateau(
             optimizer=self._optimizer, factor=0.5, patience=20, verbose=True, threshold=0.00001
         )
@@ -108,7 +119,7 @@ class Trainer:
         """
 
         # Create directory to save models
-        create_directory(path_=get_model_dir())
+        create_directory(path_=self._model_dir)
 
         # Global variables for early stopping
         min_val_loss: float = .0
@@ -123,7 +134,7 @@ class Trainer:
 
             # Log epoch information
             log(
-                info=f"Epoch: {epoch + 1}/{self._epochs}, " \
+                info=f"Epoch: {epoch + 1}/{self._epochs}, "\
                      f"Train Loss={np.round(self._loss['train'][-1], 10)}, "\
                      f"Val Loss={np.round(self._loss['val'][-1], 10)}"
             )
@@ -182,8 +193,8 @@ class Trainer:
         for i, data in enumerate(self._train_dataloader, 0):
 
             # Extract input images and ground truth heatmaps
-            inputs = data['image'].to(self._device)
-            labels = data['heatmaps'].to(self._device)
+            inputs = data[self._X_name].to(self._device)
+            labels = data[self._y_name].to(self._device)
 
             # Clear gradients from previous batches
             self._optimizer.zero_grad()
@@ -228,8 +239,8 @@ class Trainer:
             for i, data in enumerate(self._train_dataloader, 0):
 
                 # Extract input images and ground truth heatmaps
-                inputs = data['image'].to(self._device)
-                labels = data['heatmaps'].to(self._device)
+                inputs = data[self._X_name].to(self._device)
+                labels = data[self._y_name].to(self._device)
 
                 # Compute predicted heatmaps
                 outputs = self._model(inputs)
@@ -252,7 +263,7 @@ class Trainer:
         :param suffix: string to be added to the model filename to distinguish between different checkpoints.
         """
 
-        fp = get_model_file(suffix=suffix)
+        fp = path.join(self._model_dir, f"model_{suffix}")
         log_io(info=f"Saving {fp}")
         torch.save(
             obj=self._model.state_dict(),
