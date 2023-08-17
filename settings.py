@@ -99,7 +99,7 @@ HANDPOSE_MODEL_CONFIG: Dict[str, Any] = {
     "batch_size": 48,
     "batches_per_epoch": 50,
     "batches_per_epoch_val": 20,
-    "model_name": "trial"
+    "model_name": "model"
 }
 
 LEFT_RIGHT_MODEL_CONFIG: Dict[str, Any] = {

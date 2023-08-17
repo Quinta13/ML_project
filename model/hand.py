@@ -26,7 +26,6 @@ from torch import nn
 from io_ import read_json, load_image, get_2d_file, read_means_stds
 from settings import DATA, FREIHAND_INFO
 
-
 """
 Keypoints Connections
 
@@ -48,7 +47,6 @@ KEYPOINTS_CONNECTIONS: Dict[str, List[Tuple[int, int]]] = {
     "little": [(0, 17), (17, 18), (18, 19), (19, 20)],
 }
 
-
 """
 Draw Style
 
@@ -65,7 +63,6 @@ STYLE: Dict[str, int | float | str] = {
     "point_radius": 1.5,
     "line_width": 1
 }
-
 
 """
 Draw colors
@@ -96,15 +93,18 @@ class Hand:
      It provides methods to perform various operations on the hand image and keypoints,
      including Z-transformation, heatmap generation, and visualization.
 
+    It offers the possibility to mirror the image along vertical ax.
+
     Attributes:
     - idx: The dataset index of the hand image.
     - image: The original hand image.
     - keypoints: List of keypoints represented as (x, y) coordinates.
+    - mirrored: Flag that indicated is the hand is mirrored
     """
 
     # CONSTRUCTOR
 
-    def __init__(self, idx: int | str, image: Image, keypoints: List):
+    def __init__(self, idx: int | str, image: Image, keypoints: List, mirrored: bool = False):
         """
         Initialize a Hand instance with the given dataset index, image, and keypoints.
 
@@ -115,15 +115,16 @@ class Hand:
         :param idx: dataset index of the hand image, or name of the file.
         :param image: original hand image.
         :param keypoints: list of keypoints as (x, y) coordinates.
+        :param mirrored: True if the hand is mirrored with respect to the original one, False otherwise.
         """
 
         # Pad to the correct number of digits
-        self._idx: str = f"{str(idx).zfill(FREIHAND_INFO['idx_digits'])}.{FREIHAND_INFO['ext']}"\
+        self._idx: str = f"{str(idx).zfill(FREIHAND_INFO['idx_digits'])}.{FREIHAND_INFO['ext']}" \
             if type(idx) == int else idx
 
         # Resize to NEW_SIZE
         new_size = DATA["new_size"]
-        original_size = FREIHAND_INFO["size"]
+        original_size = image.width
 
         self._image: Image = image.resize((new_size, new_size))
         self._keypoints: List[Tuple[float, float]] = [
@@ -131,6 +132,8 @@ class Hand:
              float(kp_y * new_size / original_size))
             for kp_x, kp_y in keypoints
         ]
+
+        self._mirrored: bool = mirrored
 
     # REPRESENTATION
 
@@ -192,6 +195,35 @@ class Hand:
         :returns: string containing information about the image, including size and mode.
         """
         return f"Size: {self.image.size}, Mode: {self.image.mode}"
+
+    # MIRROR
+
+    @property
+    def is_mirrored(self) -> bool:
+        """
+        Get if the image is mirrored.
+
+        :returns: True if hand is mirrored, false otherwise.
+        """
+
+        return self._mirrored
+
+    def mirror(self) -> Hand:
+        """
+        Get mirrored hand.
+
+        :returns: mirrored hand (both image and keypoints).
+        """
+
+        mirrored_image = self.image.transpose(Image.FLIP_LEFT_RIGHT)
+        mirrored_keypoints = [(self.image.width - x, y) for x, y in self.keypoints]
+
+        return Hand(
+            idx=self.idx,
+            image=mirrored_image,
+            keypoints=mirrored_keypoints,
+            mirrored=not self.is_mirrored
+        )
 
     # IMAGE
 
@@ -277,7 +309,6 @@ class Hand:
 
         # Draw circles for each keypoint
         for keypoint in keypoints:
-
             radius = STYLE["point_radius"]
 
             x, y = keypoint
@@ -357,6 +388,8 @@ class Hand:
 
         return np.sum(self.heatmaps, axis=0)
 
+    # PREDICTION
+
     def predict_heatmap(self, model: nn.Module) -> np.ndarray[np.ndarray[float]]:
         """
         Generate predicted heatmaps for keypoints using a neural network model.
@@ -376,6 +409,29 @@ class Hand:
         pred_heatmaps = model(img_tensor)[0].detach().numpy()
 
         return pred_heatmaps
+
+    def predict_left_hand(self, model: nn.Module) -> bool:
+        """
+        Predicts if the hand is left using a neural network model.
+
+        :param model: A PyTorch neural network classifier to discrimnate over left and right hand.
+
+        :returns: True if the predicted hand is the left one, False otherwise.
+        """
+
+        # Convert the image to a numpy array and perform Z-score normalization
+        img = self.image_arr_z
+        img_transposed = np.transpose(a=img, axes=(2, 0, 1))
+        X = torch.from_numpy(img_transposed)
+        X = nn.functional.interpolate(X.unsqueeze(0), size=(227, 227), mode='bilinear', align_corners=False).squeeze()
+        X = X.unsqueeze(0)
+
+        predicted = model(X)
+
+        is_left = torch.argmax(predicted, dim=1).item() == 0
+
+        return is_left
+
 
     # PLOT
 

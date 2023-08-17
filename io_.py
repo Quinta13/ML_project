@@ -220,14 +220,15 @@ def get_model_file(model_name: str, suffix: str = "final") -> str:
     return path.join(get_model_dir(model_name=model_name), f"{FILES['model']}_{suffix}")
 
 
-def get_errors_file() -> str:
+def get_errors_file(model_name: str) -> str:
     """
     Get errors file.
 
+    :param model_name: name of the model.
     :return: path to errors file.
     """
 
-    return path.join(get_model_dir(), FILES["errors"])
+    return path.join(get_model_dir(model_name=model_name), FILES["errors"])
 
 
 # OPERATIONS
@@ -293,20 +294,16 @@ def store_json(path_: str, obj: Dict | List):
         json_file.write(json_string)
 
 
-def load_model(path_: str, config: Dict) -> nn.Module:
+def load_model(model: nn.Module, config: Dict) -> nn.Module:
     """
     Load a PyTorch model from a saved checkpoint file.
 
-    :param path_: path to the model checkpoint file.
+    :param model: model to be loaded.
     :param config: configuration file.
     :return: loaded PyTorch model.
     """
 
-    # Model definition
-    model = HandPoseEstimationUNet(
-        in_channel=config["in_channels"],
-        out_channel=config["out_channels"]
-    )
+    path_ = get_model_file(model_name=config["model_name"])
 
     # Load the model
     log_io(info=f"Loading model {path_}")

@@ -14,14 +14,15 @@ Classes:
 - ExternalHand: A class for performing inference on an hand image external to the Dataset.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import numpy as np
 from PIL import Image
 
 from io_ import load_image, log, load_external_image, load_model
 from model.hand import Hand, HandCollection
-from settings import FREIHAND_INFO
+from model.network import HandPoseEstimationUNet
+from settings import FREIHAND_INFO, HANDPOSE_MODEL_CONFIG, DATA
 
 
 class InferenceHand(Hand):
@@ -39,7 +40,7 @@ class InferenceHand(Hand):
     # CONSTRUCTOR
 
     def __init__(self, idx: int | str, image: Image, keypoints: List,
-                 pred_heatmaps: np.ndarray[np.ndarray[float]]):
+                 pred_heatmaps: np.ndarray[np.ndarray[float]], mirrored: bool = False):
         """
         Initialize an InferenceHand instance.
 
@@ -47,9 +48,10 @@ class InferenceHand(Hand):
         :param image: PIL Image representing the hand image.
         :param keypoints: list of tuples containing ground truth keypoints.
         :param pred_heatmaps: array of predicted heatmaps for keypoints.
+        :param mirrored: True if the hand is mirrored with respect to the original one, False otherwise.
         """
 
-        super().__init__(idx, image, keypoints)
+        super().__init__(idx=idx, image=image, keypoints=keypoints, mirrored=mirrored)
         self._pred_heatmaps = pred_heatmaps
 
     # REPRESENTATION
@@ -62,6 +64,21 @@ class InferenceHand(Hand):
         """
 
         return f"InferenceHand[{self.idx} [{self.image_info}]"
+
+    # MIRROR
+    def mirror(self) -> Hand:
+
+        mirrored_hand = super().mirror()
+
+        mirrored_pred_heatmaps = np.array([np.flip(heatmap, axis=1) for heatmap in self.pred_heatmaps])
+
+        return InferenceHand(
+            idx=self.idx,
+            image=mirrored_hand.image,
+            keypoints=mirrored_hand.keypoints,
+            pred_heatmaps=mirrored_pred_heatmaps,
+            mirrored=not self.is_mirrored
+        )
 
     # HEATMAPS
 
@@ -211,25 +228,33 @@ class HandCollectionInference(HandCollection):
 
     # CONSTRUCTOR
 
-    def __init__(self, model_fp: str):
+    def __init__(self, config: Dict):
         """
         Initialize a HandCollectionInference instance.
 
-        :param model_fp: file path to the trained HandPoseEstimation network model.
+        :param config: model configurations.
         """
 
         super().__init__()
 
         log(info="Loading the model")
 
-        self._model = load_model(path_=model_fp)
+        ann = HandPoseEstimationUNet(
+            in_channel=config["in_channels"],
+            out_channel=config["out_channels"]
+        )
+
+        self._model = load_model(model=ann, config=config)
 
     # REPRESENTATION
 
     def __str__(self) -> str:
         """
+        Get string representation for HandPoseEstimationInference object
+
         :return: string representation for the object
         """
+
         return f"HandPoseEstimationInference"
 
     # ITEMS
@@ -275,16 +300,16 @@ class ExternalHand:
 
     # CONSTRUCTOR
 
-    def __init__(self, file_name: str, model_fp: str):
+    def __init__(self, file_name: str, config: Dict):
         """
         Initialize an ExternalHand instance.
 
         :param file_name: file name or path of the external hand image.
-        :param model_fp: file path to the trained HandPoseEstimation network model.
+        :param config: model configuration.
         """
 
         self._file_name: str = file_name
-        self._hand: InferenceHand = self._get_inference_hand(model_fp=model_fp)
+        self._hand: InferenceHand = self._get_inference_hand(config=config)
 
     # REPRESENTATION
 
@@ -304,11 +329,11 @@ class ExternalHand:
 
         return str(self)
 
-    def _get_inference_hand(self, model_fp) -> InferenceHand:
+    def _get_inference_hand(self, config: Dict) -> InferenceHand:
         """
         Create an InferenceHand instance for the external hand image.
 
-        :param model_fp: file path to the trained HandPoseEstimation network model.
+        :param config: model configuration.
         :return: InferenceHand instance for the external hand image.
         """
 
@@ -321,8 +346,12 @@ class ExternalHand:
             keypoints=[]
         )
 
-        # Evaluate prediciton
-        model = load_model(model_fp)
+        ann = HandPoseEstimationUNet(
+            in_channel=config["in_channels"],
+            out_channel=config["out_channels"]
+        )        
+        
+        model = load_model(model=ann, config=config)
         pred_heatmaps = hand.predict_heatmap(model=model)
 
         return InferenceHand(

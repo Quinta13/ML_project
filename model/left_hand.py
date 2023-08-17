@@ -5,11 +5,15 @@ from torch import nn
 from torch.utils.data import Sampler
 from torch.utils.data.dataloader import _collate_fn_t, _worker_init_fn_t
 
-
+from io_ import log, load_model, load_image, load_external_image
 from model.dataset import FreiHANDDataset, FreiHANDDataLoader
+from model.hand import HandCollection, Hand
+from model.inference import HandCollectionInference, InferenceHand, ExternalHand
+from model.network import HandPoseEstimationUNet
+from settings import FREIHAND_INFO
 
 
-class FreiHANDDatasetLeftHand(FreiHANDDataset):
+class FreiHANDLeftHandDataset(FreiHANDDataset):
 
     def __init__(self, set_type: str):
         super().__init__(set_type)
@@ -18,14 +22,15 @@ class FreiHANDDatasetLeftHand(FreiHANDDataset):
 
         item = super().__getitem__(idx)
 
-        left_hand = idx % 2 == 0
+        right_hand = idx % 2 == 0
 
         X = item["image"]
-        if not left_hand:
+        X = nn.functional.interpolate(X.unsqueeze(0), size=(227, 227), mode='bilinear', align_corners=False).squeeze()
+        if not right_hand:
             X = torch.flip(X, [2])
 
-        label = 1 if left_hand else 0
-        y = torch.tensor(data=[label])
+        label = 0 if right_hand else 1
+        y = torch.tensor(data=label)
 
         return {
             "image": X,
@@ -42,7 +47,7 @@ class FreiHANDLeftHandDataLoader(FreiHANDDataLoader):
 
     # CONSTRUCTOR OVERRIDE
 
-    def __init__(self, dataset: FreiHANDDatasetLeftHand, batch_size: Optional[int] = 1, shuffle: Optional[bool] = None,
+    def __init__(self, dataset: FreiHANDLeftHandDataset, batch_size: Optional[int] = 1, shuffle: Optional[bool] = None,
                  sampler: Union[Sampler, Iterable, None] = None,
                  batch_sampler: Union[Sampler[Sequence], Iterable[Sequence], None] = None, num_workers: int = 0,
                  collate_fn: Optional[_collate_fn_t] = None, pin_memory: bool = False, drop_last: bool = False,
@@ -102,41 +107,228 @@ class FreiHANDLeftHandDataLoader(FreiHANDDataLoader):
                          pin_memory_device=pin_memory_device)
 
 
-class LeftRightHandClassifier(nn.Module):
-
-    def __init__(self):
-
-        super().__init__()
-
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(64, 192, kernel_size=5, padding=2),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(192, 384, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(384, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-        )
-        self.fc_layers = nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(256 * 4 * 4, 4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout(),
+class AlexNet(nn.Module):
+    def __init__(self, num_classes=10):
+        super(AlexNet, self).__init__()
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
+            nn.BatchNorm2d(96),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size = 3, stride = 2))
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size = 3, stride = 2))
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(384),
+            nn.ReLU())
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(384, 384, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(384),
+            nn.ReLU())
+        self.layer5 = nn.Sequential(
+            nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size = 3, stride = 2))
+        self.fc = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(9216, 4096),
+            nn.ReLU())
+        self.fc1 = nn.Sequential(
+            nn.Dropout(0.5),
             nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.Linear(4096, 2),  # Output layer for binary classification
-        )
+            nn.ReLU())
+        self.fc2= nn.Sequential(
+            nn.Linear(4096, num_classes))
 
     def forward(self, x):
+        out = self.layer1(x)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.layer5(out)
+        out = out.reshape(out.size(0), -1)
+        out = self.fc(out)
+        out = self.fc1(out)
+        out = self.fc2(out)
+        return out
 
-        x = self.conv_layers(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc_layers(x)
-        return x
 
+class LeftHandCollectionHandInference(HandCollectionInference):
+    """
+    A specialized class for managing a collection of both left and right hands
+     and performing inference on hand pose estimation results.
+
+    This class extends the `HandCollectionInference` class and provides methods for loading two trained models,
+    performing batch inference on multiple hand images, and retrieving `InferenceHand` instances for result interpretation.
+
+    Attributes:
+    - classification_model: trained Left-Right hand classification model.
+    - estimation_model: trained HandPoseEstimation network model.
+    """
+
+    # CONSTRUCTOR
+
+    def __init__(self, classifier_config: Dict, estimator_config: Dict):
+        """
+        Initialize a LeftHandCollectionHandInference instance.
+
+        :param classifier_config: model configurations for left vs. right hand classifier.
+        :param estimator_config: model configurations for 2-hand pose estimation.
+        """
+
+        super().__init__(config=estimator_config)
+
+        ann = AlexNet(num_classes=2)
+
+        self._lr_model = load_model(model=ann, config=classifier_config)
+
+    # REPRESENTATION
+
+    def __str__(self) -> str:
+        """
+        Get string representation for LeftHandCollectionHandInference object
+
+        :return: string representation for the object
+        """
+
+        return f"LeftHandCollectionHandInference"
+
+    # ITEMS
+
+    def __getitem__(self, idx: int) -> InferenceHand:
+        """
+        Retrieve an InferenceHand instance for result interpretation.
+
+        :param idx: index for selecting a hand from the collection.
+        :return: InferenceHand instance for the selected hand.
+        """
+
+        # Create collection
+        collection = HandCollection()
+        hand = collection[idx]
+
+        # Look if the hand is left
+        is_left = hand.predict_left_hand(model=self._lr_model)
+
+        # Mirror if left
+        if is_left:
+            hand = hand.mirror()
+
+        pred_heatmaps = hand.predict_heatmap(model=self._model)
+
+        # Create InferenceHand
+
+        raw_idx = idx % FREIHAND_INFO["raw"]
+
+        inference_hand = InferenceHand(
+            idx=idx,
+            image=load_image(idx=idx),
+            keypoints=self._keypoints[raw_idx],
+            pred_heatmaps=pred_heatmaps
+        )
+
+        # Mirror if left
+        if is_left:
+            inference_hand = inference_hand.mirror()
+
+        return inference_hand
+
+
+class ExternalLeftHand(ExternalHand):
+    """
+    A class for performing inference on an external hand image (left or right) using a trained model.
+
+    This class facilitates the inference process on a hand image external to the dataset,
+    generating predicted keypoints and visualizations based on a trained hand pose estimation model.
+
+    Attributes:
+    - file_name: name of file in external image directory.
+    - hand: InferenceHand instance for the external hand image.
+    """
+
+    # CONSTRUCTOR
+
+    def __init__(self, file_name: str, classifier_config: Dict, estimator_config: Dict):
+        """
+        Initialize an ExternalLeftHand instance.
+
+        :param file_name: file name or path of the external hand image.
+        :param classifier_config: model configurations for left vs. right hand classifier.
+        :param estimator_config: model configurations for 2-hand pose estimation.
+        """
+
+        super().__init__(file_name=file_name, config=estimator_config)
+
+        self._file_name: str = file_name
+        self._hand: InferenceHand = self._get_inference_left_hand(classifier_config=classifier_config,
+                                                                  estimator_config=estimator_config)
+
+    # REPRESENTATION
+
+    def __str__(self):
+        """
+        Get string representation of ExternalHand object
+
+        :return: string representation of the object
+        """
+
+        return f"ExternalLeftHand[{self.idx} [{self._hand.image_info}]"
+
+    def _get_inference_left_hand(self, classifier_config: Dict, estimator_config: Dict) -> InferenceHand:
+        """
+        Create an InferenceHand instance for the external hand image.
+
+        :param classifier_config: model configurations for left vs. right hand classifier.
+        :param estimator_config: model configurations for 2-hand pose estimation.
+        :return: InferenceHand instance for the external hand image.
+        """
+
+        # File path for the external image
+        image = load_external_image(file_name=self._file_name)
+
+        # Creating models
+
+        ann_estimator = HandPoseEstimationUNet(
+            in_channel=estimator_config["in_channels"],
+            out_channel=estimator_config["out_channels"]
+        )
+
+        ann_classifier = AlexNet(num_classes=2)
+
+        estimator = load_model(model=ann_estimator, config=estimator_config)
+        classifier = load_model(model=ann_classifier, config=classifier_config)
+
+        # Loading hand
+        hand = Hand(
+            idx=self._file_name,
+            image=image,
+            keypoints=[]
+        )
+
+        # Evaluating classification
+        is_left = hand.predict_left_hand(model=classifier)
+
+        # Mirror if left
+        if is_left:
+            hand = hand.mirror()
+
+        # Evaluate pose estimation
+        pred_heatmaps = hand.predict_heatmap(model=estimator)
+
+        # Create inference Hand
+        inference_hand = InferenceHand(
+            idx=self._file_name,
+            image=hand.image,
+            keypoints=[],
+            pred_heatmaps=pred_heatmaps
+        )
+
+        # Mirror if left
+        if is_left:
+            inference_hand = inference_hand.mirror()
+
+        return inference_hand

@@ -47,10 +47,10 @@ class Trainer:
     - loss: Dictionary containing training and validation loss values.
     """
 
-    _CHECKPOINT_FREQUENCY: int = 100
-    _EARLY_STOPPING_EPOCHS: int = 10
-    _EARLY_STOPPING_AVG: int = 10
-    _EARLY_STOPPING_PRECISION: int = 5
+    _CHECKPOINT_FREQUENCY: int = 50
+    _EARLY_STOPPING_EPOCHS: int = 5
+    _EARLY_STOPPING_AVG: int = 5
+    _EARLY_STOPPING_PRECISION: int = 4
 
     def __init__(self, model: nn.Module, criterion: nn.Module,
                  train_dataloader: DataLoader, val_dataloader: DataLoader,
