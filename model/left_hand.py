@@ -1,3 +1,18 @@
+"""
+Left hand
+____________
+
+This module contains classes and functions for handling left hand inference on the FreiHand dataset and external images.
+
+Classes:
+- FreiHANDLeftHandDataset: A specialized dataset class for left hand data from the FreiHand dataset.
+- FreiHANDLeftHandDataLoader: Implements the DataLoader for the FreiHand left hand dataset.
+- AlexNet: AlexNet model architecture for hand pose estimation.
+- LeftHandCollectionHandInference: A specialized class for managing a collection
+                                   of both left and right hands and performing inference on hand pose estimation results.
+- ExternalLeftHand: Performs inference on an external hand image (left or right) using a trained model.
+"""
+
 from typing import Dict, Any, Optional, Union, Iterable, Sequence
 
 import torch
@@ -14,11 +29,28 @@ from settings import FREIHAND_INFO
 
 
 class FreiHANDLeftHandDataset(FreiHANDDataset):
+    """
+    A specialized dataset class for left hand data from the FreiHand dataset.
+
+    This class extends the FreiHANDDataset class to provide functionality for handling left hand data.
+    """
 
     def __init__(self, set_type: str):
+        """
+        Initialize the FreiHANDLeftHandDataset instance.
+
+        :param set_type: name of set (train, val or test)
+        """
+
         super().__init__(set_type)
 
     def __getitem__(self, idx) -> Dict[str, Any]:
+        """
+        Get a data sample from the dataset.
+
+        :param idx: Index of the data sample.
+        :return: dictionary containing the data sample.
+        """
 
         item = super().__getitem__(idx)
 
@@ -40,9 +72,8 @@ class FreiHANDLeftHandDataset(FreiHANDDataset):
 
 
 class FreiHANDLeftHandDataLoader(FreiHANDDataLoader):
-
     """
-    This class implements the DataLoader for FreiHand Dataset
+    This class implements the DataLoader for the FreiHand left hand dataset.
     """
 
     # CONSTRUCTOR OVERRIDE
@@ -108,8 +139,21 @@ class FreiHANDLeftHandDataLoader(FreiHANDDataLoader):
 
 
 class AlexNet(nn.Module):
+    """
+    AlexNet model architecture for hand pose estimation.
+
+    This class implements the AlexNet architecture for hand pose estimation.
+    """
+
     def __init__(self, num_classes=10):
+        """
+        Initializes AlexNet class
+
+        :param num_classes: number of classes for classification
+        """
+
         super(AlexNet, self).__init__()
+
         self.layer1 = nn.Sequential(
             nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
             nn.BatchNorm2d(96),
@@ -145,6 +189,13 @@ class AlexNet(nn.Module):
             nn.Linear(4096, num_classes))
 
     def forward(self, x):
+        """
+        Forward pass through the network.
+
+        :param x: Input tensor.
+        :return: Output tensor.
+        """
+
         out = self.layer1(x)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -160,25 +211,25 @@ class AlexNet(nn.Module):
 class LeftHandCollectionHandInference(HandCollectionInference):
     """
     A specialized class for managing a collection of both left and right hands
-     and performing inference on hand pose estimation results.
+    and performing inference on hand pose estimation results.
 
-    This class extends the `HandCollectionInference` class and provides methods for loading two trained models,
-    performing batch inference on multiple hand images, and retrieving `InferenceHand` instances for result interpretation.
+    This class extends the HandCollectionInference class and provides methods for loading two trained models,
+    performing batch inference on multiple hand images, and retrieving InferenceHand instances for result interpretation.
 
     Attributes:
-    - classification_model: trained Left-Right hand classification model.
-    - estimation_model: trained HandPoseEstimation network model.
+    - classification_model: Trained Left-Right hand classification model.
+    - estimation_model: Trained HandPoseEstimation network model.
     """
 
     # CONSTRUCTOR
 
     def __init__(self, classifier_config: Dict, estimator_config: Dict):
         """
-        Initialize a LeftHandCollectionHandInference instance.
+       Initialize a LeftHandCollectionHandInference instance.
 
-        :param classifier_config: model configurations for left vs. right hand classifier.
-        :param estimator_config: model configurations for 2-hand pose estimation.
-        """
+       :param classifier_config: model configurations for left vs. right hand classifier.
+       :param estimator_config: model configurations for 2-hand pose estimation.
+       """
 
         super().__init__(config=estimator_config)
 
@@ -246,7 +297,7 @@ class ExternalLeftHand(ExternalHand):
     generating predicted keypoints and visualizations based on a trained hand pose estimation model.
 
     Attributes:
-    - file_name: name of file in external image directory.
+    - file_name: Name of file in external image directory.
     - hand: InferenceHand instance for the external hand image.
     """
 
