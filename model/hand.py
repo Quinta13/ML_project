@@ -520,6 +520,17 @@ class Hand:
 
         self._plot(img_array=self._heatmaps_all, title="Heatmaps")
 
+    def plot_raw_skeleton(self):
+        """
+        Plot raw image and skeleton
+        """
+
+        self._plot2(
+            img_arrays=(np.array(self.image), np.array(self.skeleton)),
+            titles=("Raw image", "Skeleton"),
+            main_title="Data sample"
+        )
+
     def plot_network_input(self):
         """
         Plot the network input composed of the normalized image and heatmaps.

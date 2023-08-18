@@ -13,7 +13,7 @@ Classes:
 - ExternalLeftHand: Performs inference on an external hand image (left or right) using a trained model.
 """
 
-from typing import Dict, Any, Optional, Union, Iterable, Sequence
+from typing import Dict, Any, Optional, Union, Iterable, Sequence, Tuple
 
 import torch
 from torch import nn
@@ -250,9 +250,10 @@ class LeftHandCollectionHandInference(HandCollectionInference):
 
     # ITEMS
 
-    def __getitem__(self, idx: int) -> InferenceHand:
+    def __getitem__(self, idx: int) -> tuple[InferenceHand, InferenceHand]:
         """
-        Retrieve an InferenceHand instance for result interpretation.
+        Retrieve two InferenceHand instance for result interpretations,
+         the first one doesn't apply the classifier, the second one does.
 
         :param idx: index for selecting a hand from the collection.
         :return: InferenceHand instance for the selected hand.
@@ -260,126 +261,41 @@ class LeftHandCollectionHandInference(HandCollectionInference):
 
         # Create collection
         collection = HandCollection()
-        hand = collection[idx]
+        hand1 = collection[idx]
+        hand2 = collection[idx]
+
+        # Mirror the end to make it left
+        hand1 = hand1.mirror()
+        hand2 = hand2.mirror()
 
         # Look if the hand is left
-        is_left = hand.predict_left_hand(model=self._lr_model)
+        is_left = hand2.predict_left_hand(model=self._lr_model)
 
         # Mirror if left
         if is_left:
-            hand = hand.mirror()
+            hand2 = hand2.mirror()
 
-        pred_heatmaps = hand.predict_heatmap(model=self._model)
+        pred_heatmaps1 = hand1.predict_heatmap(model=self._model)
+        pred_heatmaps2 = hand2.predict_heatmap(model=self._model)
 
         # Create InferenceHand
 
-        raw_idx = idx % FREIHAND_INFO["raw"]
-
-        inference_hand = InferenceHand(
+        inference_hand1 = InferenceHand(
             idx=idx,
-            image=load_image(idx=idx),
-            keypoints=self._keypoints[raw_idx],
-            pred_heatmaps=pred_heatmaps
+            image=hand1.image,
+            keypoints=hand1.keypoints,
+            pred_heatmaps=pred_heatmaps1
+        )
+
+        inference_hand2 = InferenceHand(
+            idx=idx,
+            image=hand2.image,
+            keypoints=hand2.keypoints,
+            pred_heatmaps=pred_heatmaps2
         )
 
         # Mirror if left
         if is_left:
-            inference_hand = inference_hand.mirror()
+            inference_hand2 = inference_hand2.mirror()
 
-        return inference_hand
-
-
-class ExternalLeftHand(ExternalHand):
-    """
-    A class for performing inference on an external hand image (left or right) using a trained model.
-
-    This class facilitates the inference process on a hand image external to the dataset,
-    generating predicted keypoints and visualizations based on a trained hand pose estimation model.
-
-    Attributes:
-    - file_name: Name of file in external image directory.
-    - hand: InferenceHand instance for the external hand image.
-    """
-
-    # CONSTRUCTOR
-
-    def __init__(self, file_name: str, classifier_config: Dict, estimator_config: Dict):
-        """
-        Initialize an ExternalLeftHand instance.
-
-        :param file_name: file name or path of the external hand image.
-        :param classifier_config: model configurations for left vs. right hand classifier.
-        :param estimator_config: model configurations for 2-hand pose estimation.
-        """
-
-        super().__init__(file_name=file_name, config=estimator_config)
-
-        self._file_name: str = file_name
-        self._hand: InferenceHand = self._get_inference_left_hand(classifier_config=classifier_config,
-                                                                  estimator_config=estimator_config)
-
-    # REPRESENTATION
-
-    def __str__(self):
-        """
-        Get string representation of ExternalHand object
-
-        :return: string representation of the object
-        """
-
-        return f"ExternalLeftHand[{self.idx} [{self._hand.image_info}]"
-
-    def _get_inference_left_hand(self, classifier_config: Dict, estimator_config: Dict) -> InferenceHand:
-        """
-        Create an InferenceHand instance for the external hand image.
-
-        :param classifier_config: model configurations for left vs. right hand classifier.
-        :param estimator_config: model configurations for 2-hand pose estimation.
-        :return: InferenceHand instance for the external hand image.
-        """
-
-        # File path for the external image
-        image = load_external_image(file_name=self._file_name)
-
-        # Creating models
-
-        ann_estimator = HandPoseEstimationUNet(
-            in_channel=estimator_config["in_channels"],
-            out_channel=estimator_config["out_channels"]
-        )
-
-        ann_classifier = AlexNet(num_classes=2)
-
-        estimator = load_model(model=ann_estimator, config=estimator_config)
-        classifier = load_model(model=ann_classifier, config=classifier_config)
-
-        # Loading hand
-        hand = Hand(
-            idx=self._file_name,
-            image=image,
-            keypoints=[]
-        )
-
-        # Evaluating classification
-        is_left = hand.predict_left_hand(model=classifier)
-
-        # Mirror if left
-        if is_left:
-            hand = hand.mirror()
-
-        # Evaluate pose estimation
-        pred_heatmaps = hand.predict_heatmap(model=estimator)
-
-        # Create inference Hand
-        inference_hand = InferenceHand(
-            idx=self._file_name,
-            image=hand.image,
-            keypoints=[],
-            pred_heatmaps=pred_heatmaps
-        )
-
-        # Mirror if left
-        if is_left:
-            inference_hand = inference_hand.mirror()
-
-        return inference_hand
+        return inference_hand1, inference_hand2
