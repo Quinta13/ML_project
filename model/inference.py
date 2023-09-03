@@ -309,7 +309,7 @@ class ExternalHand:
         """
 
         self._file_name: str = file_name
-        self._hand: InferenceHand = self._get_inference_hand(config=config)
+        self._hand: Infe = self._get_inference_hand(config=config)
 
     # REPRESENTATION
 
@@ -329,6 +329,15 @@ class ExternalHand:
 
         return str(self)
 
+    def _load_image(self) -> Image:
+        """
+        Load image from specific directory
+
+        :return: loaded image
+        """
+
+        return load_external_image(file_name=self._file_name)
+
     def _get_inference_hand(self, config: Dict) -> InferenceHand:
         """
         Create an InferenceHand instance for the external hand image.
@@ -338,7 +347,7 @@ class ExternalHand:
         """
 
         # File path for the external image
-        image = load_external_image(file_name=self._file_name)
+        image = self._load_image()
 
         hand = Hand(
             idx=self._file_name,

@@ -21,7 +21,6 @@ import torch
 from PIL import Image
 from torch import nn
 
-from model.network import HandPoseEstimationUNet
 from settings import FREIHAND_INFO
 
 """

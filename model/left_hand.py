@@ -208,7 +208,7 @@ class AlexNet(nn.Module):
         return out
 
 
-class LeftHandCollectionHandInference(HandCollectionInference):
+class LeftHandCollectionInference(HandCollectionInference):
     """
     A specialized class for managing a collection of both left and right hands
     and performing inference on hand pose estimation results.
@@ -299,3 +299,89 @@ class LeftHandCollectionHandInference(HandCollectionInference):
             inference_hand2 = inference_hand2.mirror()
 
         return inference_hand1, inference_hand2
+
+
+class ExternalLeftHand(ExternalHand):
+    """
+    A class for performing inference on an external left-hand image using a trained model.
+
+    This class facilitates the inference process on an external hand image, generating predicted keypoints and visualizations
+    based on a trained hand pose estimation model.
+
+    Attributes:
+    - file_name: name of file in external image directory.
+    - hand: InferenceLeftHand instance for the external hand image.
+    """
+
+    # CONSTRUCTOR
+
+    def __init__(self, file_name: str, estimator_config: Dict, classifier_config: Dict):
+        """
+        Initialize an ExternalLeftHand instance.
+
+        :param file_name: file name or path of the external hand image.
+        :param classifier_config: model configurations for left vs. right hand classifier.
+        :param estimator_config: model configurations for 2-hand pose estimation.
+        """
+
+        super().__init__(file_name=file_name, config=estimator_config)
+        self._hand: InferenceHand = self._get_inference_left_hand(
+            estimator_config=estimator_config, classifier_config=classifier_config
+        )
+
+    # REPRESENTATION
+
+    def __str__(self):
+        """
+        Get string representation of ExternalHand object
+        :return: string representation of the object
+        """
+
+        return f"ExternalLeftHand[{self.idx} [{self._hand.image_info}]"
+
+    def _get_inference_left_hand(self, estimator_config: Dict, classifier_config: Dict) -> InferenceHand:
+        """
+        Create an InferenceHand instance for the external left-hand image.
+
+        :param classifier_config: model configurations for left vs. right hand classifier.
+        :param estimator_config: model configurations for 2-hand pose estimation.
+        """
+
+        # File path for the external image
+        image = self._load_image()
+
+        hand = Hand(
+            idx=self._file_name,
+            image=image,
+            keypoints=[]
+        )
+
+        # Classifier
+        ann = AlexNet(num_classes=2)
+        lr_model = load_model(model=ann, config=classifier_config)
+
+        is_left = hand.predict_left_hand(model=lr_model)
+
+        if is_left:
+            hand = hand.mirror()
+
+        ann = HandPoseEstimationUNet(
+            in_channel=estimator_config["in_channels"],
+            out_channel=estimator_config["out_channels"]
+        )
+
+        estimator = load_model(model=ann, config=estimator_config)
+        pred_heatmaps = hand.predict_heatmap(model=estimator)
+
+        inference_hand = InferenceHand(
+            idx=self._file_name,
+            image=hand.image,
+            keypoints=[],
+            pred_heatmaps=pred_heatmaps
+        )
+
+        if is_left:
+            inference_hand = inference_hand.mirror()
+
+        return inference_hand
+
