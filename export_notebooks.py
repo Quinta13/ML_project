@@ -1,4 +1,5 @@
 import os
+import subprocess
 from os import path
 
 import nbformat
@@ -8,6 +9,7 @@ from nbconvert.preprocessors import TagRemovePreprocessor
 from nbconvert.preprocessors import ClearOutputPreprocessor
 
 from io_ import get_root_dir
+
 
 def export():
 
@@ -19,41 +21,31 @@ def export():
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 
-    # Initialize a PDF exporter
-    pdf_exporter = PDFExporter()
-
-    # Initialize preprocessors
-    execute_preprocessor = ExecutePreprocessor(timeout=None)
-    tag_remove_preprocessor = TagRemovePreprocessor(tags=["remove-cell"])
-    clear_output_preprocessor = ClearOutputPreprocessor()
-
     # Loop through notebooks in the input directory
     for filename in os.listdir(input_directory):
         if filename.endswith(".ipynb"):
             input_path = os.path.join(input_directory, filename)
             output_path = os.path.join(output_directory, os.path.splitext(filename)[0] + ".pdf")
 
-            # Create a notebook object from the input file
-            with open(input_path, "r", encoding="utf-8") as nb_file:
-                notebook = nbformat.read(nb_file, as_version=4)
+            # Run the nbconvert command to convert the notebook to PDF
+            command = [
+                "jupyter",
+                "nbconvert",
+                "--to",
+                "pdf",
+                input_path,
+                "--output",
+                output_path,
+            ]
 
-            # Preprocess the notebook
-            notebook, _ = execute_preprocessor.preprocess(notebook, {})
-            notebook, _ = tag_remove_preprocessor.preprocess(notebook, {})
-            notebook, _ = clear_output_preprocessor.preprocess(notebook, {})
-
-            # Export the notebook to PDF
-            pdf_data, _ = pdf_exporter.from_notebook_node(notebook)
-
-            # Write the PDF data to the output file
-            with open(output_path, "wb") as pdf_file:
-                pdf_file.write(pdf_data)
-
-            print(f"Notebook exported to PDF: {output_path}")
+            try:
+                subprocess.run(command, check=True)
+                print(f"Notebook '{input_path}' exported to PDF: '{output_path}'")
+            except subprocess.CalledProcessError as e:
+                print(f"Error exporting '{input_path}' to PDF: {e}")
 
     print("All notebooks exported to PDF.")
 
 
 if __name__ == "__main__":
-
     export()

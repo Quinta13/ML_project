@@ -473,7 +473,7 @@ class Hand:
         title1, title2 = titles
 
         # Subplots
-        fig, axes = plt.subplots(1, 2, figsize=(7, 4))
+        fig, axes = plt.subplots(1, 2, figsize=(5, 3))
 
         for ax, img, title in zip([0, 1], [img1, img2], [title1, title2]):
 

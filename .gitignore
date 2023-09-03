@@ -9,3 +9,6 @@
 
 # Demo
 /demo/in/
+
+# Exported notebooks
+/notebooks_exported/
