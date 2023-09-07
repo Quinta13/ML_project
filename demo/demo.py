@@ -37,8 +37,8 @@ DEMO_DIR = str(path.abspath(path.join(__file__, "../")))
 CONTINUE_KEY = 32  # space-bar
 IN = path.join(DEMO_DIR, "in")
 SCREENSHOT_FP = path.join(DEMO_DIR, IN, "img.jpg")
-OUT_SIZE = (400, 400)
-CAMERA = 0
+OUT_SIZE = (440, 440)
+CAMERA = 2
 
 # MODELS
 CLASSIFIER = load_model(model=AlexNet(num_classes=2), config=LEFT_RIGHT_MODEL_CONFIG)
@@ -489,8 +489,10 @@ if __name__ == "__main__":
                 screenshot()
                 
             else:
-                input(f"Invalid option, choose a number between {0} and {len(menu_options)}...")
+                print()
+                input(f"  {RED}ERR{RESET}: Please choose a number between {0} and {len(menu_options)}...")
         else:
-            input("Please insert a number to select an option...")
+            print()
+            input(f"  {RED}ERR{RESET}: Please insert a number to select an option...")
 
     os.system("clear")
