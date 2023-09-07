@@ -1,5 +1,6 @@
 import os
 from os import path
+import time
 from typing import List, Dict
 
 import cv2
@@ -7,13 +8,14 @@ import numpy as np
 from PIL import Image
 from tabulate import tabulate
 
+
 """ PATHS TO RUN WITH TERMINAL """
 import sys
+sys.stderr = open(os.devnull, 'w')
 demo_dir = path.abspath(path.dirname(path.join(__file__, "../")))
 root_dir = path.abspath(path.dirname(path.join(__file__, "../", "../")))
 sys.path.remove(demo_dir)
 sys.path.append(root_dir)
-
 
 from io_ import load_model
 from model.network import HandPoseEstimationUNet
@@ -22,12 +24,20 @@ from model.hand import HandCollection
 from model.inference import InferenceHand, ExternalHand
 from settings import HANDPOSE_MODEL_CONFIG, LEFT_RIGHT_MODEL_CONFIG, DATA
 
+
+# COLORS
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+BLUE = "\033[96m"
+RESET = "\033[0m"
+
 # GLOBALS SETTING
 DEMO_DIR = str(path.abspath(path.join(__file__, "../")))
 CONTINUE_KEY = 32  # space-bar
 IN = path.join(DEMO_DIR, "in")
 SCREENSHOT_FP = path.join(DEMO_DIR, IN, "img.jpg")
-OUT_SIZE = (480, 480)
+OUT_SIZE = (400, 400)
 CAMERA = 0
 
 # MODELS
@@ -147,6 +157,44 @@ def show_predictions(img1: Image, img2: Image):
     cv2.imshow('HandPoseEstimation', opencv_img1)
     cv2.imshow('HandPoseEstimation 2.0', opencv_img2)
 
+    # Move
+    cv2.moveWindow('HandPoseEstimation', 0, 0)
+    cv2.moveWindow('HandPoseEstimation 2.0', 500, 500)
+
+    # Display until continue key is pressed
+    while True:
+        k = cv2.waitKey(1)
+        if k == CONTINUE_KEY:
+            cv2.destroyAllWindows()
+            break
+
+
+def show_predictions4(img1: Image, img2: Image, img3: Image, img4: Image):
+
+    img1 = img1.resize(OUT_SIZE, Image.ANTIALIAS)
+    opencv_img1 = cv2.cvtColor(np.array(img1), cv2.COLOR_BGR2RGB)
+
+    img2 = img2.resize(OUT_SIZE, Image.ANTIALIAS)
+    opencv_img2 = cv2.cvtColor(np.array(img2), cv2.COLOR_BGR2RGB)
+
+    img3 = img3.resize(OUT_SIZE, Image.ANTIALIAS)
+    opencv_img3 = cv2.cvtColor(np.array(img3), cv2.COLOR_BGR2RGB)
+
+    img4 = img4.resize(OUT_SIZE, Image.ANTIALIAS)
+    opencv_img4 = cv2.cvtColor(np.array(img4), cv2.COLOR_BGR2RGB)
+
+    # Display the image using OpenCV
+    cv2.imshow('Raw', opencv_img1)
+    cv2.imshow('Augmented1', opencv_img2)
+    cv2.imshow('Augmented2', opencv_img3)
+    cv2.imshow('Augmented3', opencv_img4)
+
+    # Move
+    cv2.moveWindow('Raw', 0, 0)
+    cv2.moveWindow('Augmented1', 500, 0)
+    cv2.moveWindow('Augmented2', 0, 500)
+    cv2.moveWindow('Augmented3', 500, 500)
+
     # Display until continue key is pressed
     while True:
         k = cv2.waitKey(1)
@@ -156,18 +204,17 @@ def show_predictions(img1: Image, img2: Image):
 
 # DEMO IMAGES
 
-def demo_images(img_name):
-    file_name = path.join(IN, img_name)
+def _demo_images(img_fp):
 
     # Load hand
     hand1 = DemoHand(
-        file_name=file_name,
+        file_name=img_fp,
         config=HANDPOSE_MODEL_CONFIG
     )
 
     # Load left-hand
     hand2 = DemoLeftHand(
-        file_name=file_name,
+        file_name=img_fp,
         estimator_config=HANDPOSE_MODEL_CONFIG,
         classifier_config=LEFT_RIGHT_MODEL_CONFIG
     )
@@ -177,12 +224,75 @@ def demo_images(img_name):
         img2=hand2.pred_skeleton
     )
 
+
+def demo_images():
+
+    # Demo images in IN directory
+    images: List[str] = os.listdir(IN)
+    images.sort()
+    images_dict: Dict[int, str] = {i + 1: img for i, img in enumerate(images)}
+
+    print()
+    print(f"{YELLOW}---- Demo Images ----{RESET}")
+
+    menu = [[f"{BLUE}[{i}]{RESET}", img] for i, img in images_dict.items()]
+    print(tabulate(menu, tablefmt="fancy_grid"))
+
+    print()
+
+    i = input(f"{GREEN}• Enter image option: {RESET}")
+
+    if not i.isdigit():
+        print()
+        input(f"  {RED}ERR{RESET}: Please select a number option...")
+        return
+
+    i = int(i)
+
+    if i < 1 or len(images_dict) < i:
+        print()
+        input(f"  {RED}ERR{RESET}: Please select a valid index in specified image...")
+        return
+    
+    img_name = images_dict[i]
+    img_fp = path.join(IN, img_name)
+
+    _demo_images(img_fp=img_fp)
+
+
 # FREIHAND
 
 def freihand():
 
-    idx = int(input("Select image index: "))
-    mirror = input("Use left [y/n]: ") == "y"
+    print()
+    print(f"{YELLOW}---- FreiHAND Dataset ----{RESET}")
+
+    print()
+    idx = input(f"{GREEN}• Enter image index{YELLOW} [0, 130.239]{RESET}: ")
+
+    if not idx.isdigit():
+        print()
+        input(f"  {RED}ERR{RESET}: Please select a number as image index...")
+        return
+
+    idx = int(idx)
+
+    if idx < 0 or 130239 < idx:
+        print()
+        input(f"  {RED}ERR{RESET}: Please select an image index in specified range...")
+        return
+
+    print()
+    mirror_ch = input(f"{GREEN}• Mirror to simulate left hand?{RESET} {YELLOW}[y/n]{RESET}: ")
+
+    if mirror_ch == "y":
+        mirror = True
+    elif mirror_ch == "n":
+        mirror = False
+    else:
+        print()
+        input(f"  {RED}ERR{RESET}: Choose one between \"y\" and \"n\"...")
+        return
 
     hand1 = COLLECTION[idx]
     hand2 = COLLECTION[idx]
@@ -215,8 +325,47 @@ def freihand():
 
     show_predictions(img1=pred_hand1.pred_skeleton,
                      img2=pred_hand2.pred_skeleton)
+    
 
+# AUGMENTATION
 
+def augmentation():
+
+    print()
+    print(f"{YELLOW}---- Data Augmentation ----{RESET}")
+    
+    print()
+    idx = input(f"{GREEN}• Enter image index{YELLOW} [0, 32.559]{RESET}: ")
+
+    if not idx.isdigit():
+        print()
+        input(f"  {RED}ERR{RESET}: Please select a number as image index...")
+        return
+
+    idx = int(idx)
+
+    if idx < 0 or 32559 < idx:
+        print()
+        input(f"  {RED}ERR{RESET}: Please select an image index in specified range...")
+        return
+
+    hands = [COLLECTION[idx + i * 32560] for i in range(4)] 
+
+    inference_hands = [
+        InferenceHand(
+            idx=hand.idx,
+            image=hand.image,
+            keypoints=hand.keypoints,
+            pred_heatmaps=hand.predict_heatmap(model=ESTIMATOR)
+        )
+        for hand in hands
+    ]
+
+    img1, img2, img3, img4 = [hand.pred_skeleton for hand in inference_hands]
+
+    show_predictions4(img1=img1, img2=img2, img3=img3, img4=img4)
+
+                      
 # SCREENSHOT
 
 def img_transformation():
@@ -257,81 +406,91 @@ def screenshot():
     # Initialize the USB webcam
     cam = cv2.VideoCapture(CAMERA)
     cv2.namedWindow('2-Hand Pose Estimation - Demo')
+    
+    while True:
 
-    # Initializing the frame and ret
-    ret, frame = cam.read()
+        # Initializing the frame and ret
+        ret, frame = cam.read()
 
-    # If statement
-    if not ret:
-        print('Failed to grab frame')
-        return 1
+        # If statement
+        if not ret:
+            print('Failed to grab frame')
+            break
 
-    # The frame will show with the title of the app
-    cv2.imshow('2-Hand Pose Estimation - Screenshot', frame)
+        # The frame will show with the title of the app
+        cv2.imshow('2-Hand Pose Estimation - Screenshot', frame)
 
-    # Wait for key to be pressed
-    k = cv2.waitKey(1)
+        # Wait for key to be pressed
+        k = cv2.waitKey(1)
 
-    # If the continue key is pressed, screenshots will be taken
-    if k == CONTINUE_KEY:
-        print(f'Screenshot taken and saved as {SCREENSHOT_FP}')
+        # If the continue key is pressed, screenshots will be taken
+        if k == CONTINUE_KEY:
 
-        # Save screenshot and transform
-        cv2.imwrite(SCREENSHOT_FP, frame)
-        img_transformation()
+            print(f'Screenshot taken and saved as {SCREENSHOT_FP}')
 
-        # Close camera
-        cam.release()
-        cv2.destroyAllWindows()
+            # Save screenshot and transform
+            cv2.imwrite(SCREENSHOT_FP, frame)
+            img_transformation()
 
-        # Show outputs
-        demo_images(SCREENSHOT_FP)
+            # Close camera
+            cam.release()
+            cv2.destroyAllWindows()
 
-        # Delete image
-        os.remove(SCREENSHOT_FP)
+            # Show outputs
+            _demo_images(SCREENSHOT_FP)
 
-        return 0
+            # Delete image
+            os.remove(SCREENSHOT_FP)
 
-    else:
-
-        return 1
+            break
 
 # MENU
 
 
 if __name__ == "__main__":
 
-    # Demo images in IN directory
-    images: List[str] = os.listdir(IN)
-    images.sort()
-    images_dict: Dict[int, str] = {i + 3: img for i, img in enumerate(images)}
-
-    menu_options = ["FreiHandCollection", "Screenshot"] + list(images_dict.values())
+    # Base options
+    menu_options = ["FreiHandCollection", "Augmentation", "Directory", "Screenshot"]
 
     while True:
 
-        print(f"-- 2D Hand Pose Estimation --")
+        os.system("clear")
 
-        menu = [[f"[{i+1}]", option] for i, option in enumerate(menu_options)]
-        menu += [[f"[0]", "Exit"]]
+        print(f"{YELLOW} -- 2D Hand Pose Estimation -- {RESET}")
+
+        menu = [[f"{BLUE}[{i+1}]{RESET}", option] for i, option in enumerate(menu_options)]
+        menu += [[f"{BLUE}[0]{RESET}", "Exit"]]
         print(tabulate(menu, tablefmt="fancy_grid"))
 
-        choice = int(input("Select option: "))
+        print()
+        choice = input(f"{GREEN}• Enter option: {RESET}")
 
-        if choice == 0:
-            os.system('clear')
-            break
+        if choice.isdigit():
+            choice = int(choice)
+              
+            if choice == 0:
+                print()
+                print("Thank you! ")
+                time.sleep(2)
+                os.system('clear')
+                
+                break
 
-        elif choice == 1:
-            freihand()
+            elif choice == 1:
+                freihand()
 
-        elif choice == 2:
+            elif choice == 2:
+                augmentation()
 
-            while True:
-                print("here main")
-                if screenshot() == 0:
-                    break
+            elif choice == 3:
+                demo_images()
 
-        elif 2 <= choice < 3 + len(images_dict):
+            elif choice == 4:
+                screenshot()
+                
+            else:
+                input(f"Invalid option, choose a number between {0} and {len(menu_options)}...")
+        else:
+            input("Please insert a number to select an option...")
 
-            demo_images(img_name=images_dict[choice])
+    os.system("clear")
