@@ -38,7 +38,7 @@ CONTINUE_KEY = 32  # space-bar
 IN = path.join(DEMO_DIR, "in")
 SCREENSHOT_FP = path.join(DEMO_DIR, IN, "img.jpg")
 OUT_SIZE = (440, 440)
-CAMERA = 2
+CAMERA = 0
 
 # MODELS
 CLASSIFIER = load_model(model=AlexNet(num_classes=2), config=LEFT_RIGHT_MODEL_CONFIG)
